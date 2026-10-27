@@ -6,7 +6,10 @@ turnbuckle slams, folding chairs and tables. Includes 1v1 arcade/practice, 2v2 t
 
 - **Engine:** Godot 4.7 (GDScript, Forward+, Jolt physics), project in [`game/`](game/)
 - **Assets:** generated procedurally by Blender 5.2 Python scripts in [`blender/`](blender/)
-- **Design:** [`docs/DESIGN.md`](docs/DESIGN.md) · **Credits/licenses:** [`docs/CREDITS.md`](docs/CREDITS.md)
+- **Design:** [`docs/DESIGN.md`](docs/DESIGN.md) · **Art pipeline:** [`docs/ART_PIPELINE.md`](docs/ART_PIPELINE.md) · **Credits/licenses:** [`docs/CREDITS.md`](docs/CREDITS.md)
+
+![Ring](docs/img/m1_ring.png)
+![Wrestlers](docs/img/m1_wrestlers.png)
 
 ## Getting started
 
@@ -15,6 +18,7 @@ git lfs install            # once per machine (tools/setup.sh does this too)
 git clone https://github.com/intra-secdsm/slamquake.git
 cd wrestle
 tools/setup.sh             # installs pinned Godot, Blender, git-lfs into ~/.local (no sudo)
+tools/build_assets.sh      # regenerate models/animations with Blender (see docs/ART_PIPELINE.md)
 tools/test.sh              # run the test suite headlessly
 godot --path game          # play
 godot -e --path game       # open the editor
@@ -35,7 +39,7 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 | | Milestone | Status |
 |---|---|---|
 | M0 | Toolchain, repo, project skeleton, tests | ✅ |
-| M1 | Blender → Godot asset pipeline (rig, wrestler, ring) | |
+| M1 | Blender → Godot asset pipeline (rig, wrestler, ring) | ✅ |
 | M2 | Movement, strikes, camera, HUD | |
 | M3 | Grapples, whips, rope rebounds, pinfalls: first full match | |
 | M4 | Top rope, apron, outside, chair, tables, ragdoll | |

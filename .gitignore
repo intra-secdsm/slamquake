@@ -16,3 +16,6 @@ __pycache__/
 .idea/
 *.swp
 .DS_Store
+
+# in-progress asset exports
+*.tmp.glb

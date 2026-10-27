@@ -1,0 +1,387 @@
+"""Procedural wrestler body, hair and eyes.
+
+The body is one signed-distance shape built from bone-tagged primitives. Its base mesh
+is polygonized once; body-type blend shapes are made by projecting that same mesh onto
+variant shapes (heavier, more muscular, gut...), so every variant shares topology and
+can be mixed freely in Godot.
+
+Per-vertex data consumed by the Godot wrestler shader:
+  UV0   = (rest_x * 0.25 + 0.5, rest_z * 0.25)        rest-pose position (front plane)
+  UV1   = (limb_t, rest_y * 0.25 + 0.5)               0..1 along arm/leg chain, depth
+  Color = (arm, leg, head+neck, torso) region weights (linear float)
+"""
+import bmesh
+import bpy
+import numpy as np
+
+from . import rig
+from .sdf import Prim, Shape, ellipsoid, half_space, polygonize, round_cone, sphere
+
+BASE_PARAMS = dict(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0)
+# Blend shape name -> parameter overrides relative to BASE_PARAMS.
+BLEND_SHAPES = {
+    "heavy": dict(mass=1.0),
+    "slim": dict(mass=-1.0),
+    "muscle": dict(muscle=1.0),
+    "gut": dict(gut=1.0),
+    "kneepads": dict(kneepads=1.0),
+}
+
+ARM_CHAIN = ["upper_arm", "forearm", "hand", "fingers"]
+LEG_CHAIN = ["thigh", "shin", "foot", "toe"]
+
+
+def _t(v):
+    return tuple(float(x) for x in v)
+
+
+def _dir(bone):
+    return _t((rig.tail(bone) - rig.head(bone)).normalized())
+
+
+# ------------------------------------------------------------------ shapes
+
+def body_shape(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0):
+    mt = 1 + (0.22 if mass > 0 else 0.15) * mass   # torso girth
+    ml = 1 + (0.17 if mass > 0 else 0.14) * mass   # limb girth
+    mu = 0.55 + 0.75 * muscle                      # muscle bulk
+    P = []
+
+    def add(fn, bone, k=0.03, **kw):
+        P.append(Prim(fn, bone, k, **kw))
+
+    # torso
+    add(ellipsoid, "hips", 0.04, c=(0, 0.015, 1.00), radii=(0.165 * mt, 0.12 * mt, 0.125))
+    add(ellipsoid, "spine", 0.05, c=(0, 0.005, 1.16), radii=(0.15 * mt, 0.11 * mt, 0.15))
+    add(ellipsoid, "chest", 0.05, c=(0, 0.0, 1.36), radii=(0.18 * mt, 0.125 * mt, 0.17))
+    add(ellipsoid, "chest", 0.04, c=(0, 0.005, 1.465),
+        radii=(0.2 * mt + 0.02 * muscle, 0.115 * mt, 0.10))
+    add(ellipsoid, "spine", 0.05, c=(0, -0.075 * mt, 1.22), radii=(0.10, 0.04, 0.13))
+    if gut > 0:
+        add(ellipsoid, "spine", 0.07, c=(0, -0.05 - 0.06 * gut, 1.14),
+            radii=(0.15 + 0.03 * gut, 0.08 + 0.07 * gut, 0.13 + 0.04 * gut))
+    add(round_cone, "neck", 0.04, a=(0, 0.015, 1.49), b=(0, 0.0, 1.71),
+        r1=0.078 * (1 + 0.3 * muscle) * ml, r2=0.066 * ml)
+
+    # head
+    add(ellipsoid, "head", 0.03, c=(0, 0.012, 1.80), radii=(0.083, 0.098, 0.10))
+    add(ellipsoid, "head", 0.03, c=(0, -0.035, 1.745), radii=(0.07, 0.07, 0.08))
+    add(ellipsoid, "head", 0.02, c=(0, -0.083, 1.69), radii=(0.032, 0.022, 0.028))
+    add(ellipsoid, "head", 0.02, c=(0, -0.086, 1.814), radii=(0.07, 0.024, 0.019))
+    add(round_cone, "head", 0.012, a=(0, -0.092, 1.80), b=(0, -0.112, 1.758), r1=0.010, r2=0.016)
+    add(ellipsoid, "head", 0.01, c=(0, -0.092, 1.727), radii=(0.026, 0.012, 0.010))
+
+    for side in rig.SIDES:
+        s = rig.side_sign(side)
+        b = lambda name: f"{name}.{side}"  # noqa: E731
+
+        # torso muscles
+        add(ellipsoid, "hips", 0.04, c=(s * 0.075, 0.07, 0.935),
+            radii=(0.085 * ml, 0.075 * mt, 0.095))
+        add(ellipsoid, "chest", 0.04, c=(s * 0.08, -0.075 * mt, 1.42),
+            radii=(0.085 * mu, 0.045 * mu, 0.06 * mu))
+        add(ellipsoid, "chest", 0.05, c=(s * 0.13 * mt, 0.03, 1.33), radii=(0.06 * mu, 0.08, 0.12))
+        add(ellipsoid, b("clavicle"), 0.05, c=(s * 0.07, 0.035, 1.53),
+            radii=(0.10 * mu, 0.06 * mu, 0.06 * mu))
+
+        # face details
+        add(ellipsoid, "head", 0.025, c=(s * 0.048, -0.025, 1.705), radii=(0.032, 0.045, 0.03))
+        add(ellipsoid, "head", 0.02, c=(s * 0.045, -0.072, 1.765), radii=(0.028, 0.02, 0.02))
+        add(ellipsoid, "head", 0.01, c=(s * 0.085, 0.008, 1.775), radii=(0.012, 0.024, 0.033))
+        add(ellipsoid, "head", 0.006, c=(s * 0.032, -0.083, 1.797), radii=(0.019, 0.012, 0.009))
+
+        # arm
+        sh, el = rig.head(b("upper_arm")), rig.tail(b("upper_arm"))
+        wr = rig.tail(b("forearm"))
+        ua, fa = _dir(b("upper_arm")), _dir(b("forearm"))
+        add(ellipsoid, b("upper_arm"), 0.04, c=_t(sh + rig.Vector((s * 0.025, 0, -0.02))),
+            radii=(0.075 * mu * ml, 0.08 * mu, 0.075 * mu))
+        add(round_cone, b("upper_arm"), 0.03, a=_t(sh), b=_t(el), r1=0.06 * ml, r2=0.047 * ml)
+        add(ellipsoid, b("upper_arm"), 0.03,
+            c=_t(rig.lerp(b("upper_arm"), 0.55) + rig.Vector((0, -0.022, 0))),
+            radii=(0.09, 0.042 * mu, 0.045 * mu), axis=ua)
+        add(ellipsoid, b("upper_arm"), 0.03,
+            c=_t(rig.lerp(b("upper_arm"), 0.45) + rig.Vector((0, 0.025, 0))),
+            radii=(0.10, 0.04 * mu, 0.045 * mu), axis=ua)
+        add(round_cone, b("forearm"), 0.03, a=_t(el), b=_t(wr), r1=0.048 * ml, r2=0.036 * ml)
+        add(ellipsoid, b("forearm"), 0.03, c=_t(rig.lerp(b("forearm"), 0.3)),
+            radii=(0.09, 0.042 * mu, 0.045 * mu), axis=fa)
+        add(ellipsoid, b("hand"), 0.02, c=_t(rig.lerp(b("hand"), 0.5)),
+            radii=(0.05, 0.045, 0.024), axis=_dir(b("hand")))
+        add(ellipsoid, b("fingers"), 0.015, c=_t(rig.lerp(b("fingers"), 0.45)),
+            radii=(0.05, 0.043, 0.022), axis=_dir(b("fingers")))
+        add(round_cone, b("thumb"), 0.012, a=_t(rig.head(b("thumb"))), b=_t(rig.tail(b("thumb"))),
+            r1=0.015, r2=0.012)
+
+        # leg
+        hp, kn, an = rig.head(b("thigh")), rig.tail(b("thigh")), rig.tail(b("shin"))
+        th, sn = _dir(b("thigh")), _dir(b("shin"))
+        add(round_cone, b("thigh"), 0.03, a=_t(hp), b=_t(kn), r1=0.10 * ml, r2=0.062 * ml)
+        add(ellipsoid, b("thigh"), 0.04,
+            c=_t(rig.lerp(b("thigh"), 0.45) + rig.Vector((0, -0.03, 0))),
+            radii=(0.2, 0.065 * mu * ml, 0.06 * mu), axis=th)
+        add(ellipsoid, b("thigh"), 0.04,
+            c=_t(rig.lerp(b("thigh"), 0.5) + rig.Vector((0, 0.03, 0))),
+            radii=(0.18, 0.06 * ml, 0.05 * mu), axis=th)
+        add(sphere, b("shin"), 0.03, c=_t(kn + rig.Vector((0, -0.01, 0))), r=0.058 * ml)
+        if kneepads > 0:
+            add(ellipsoid, b("shin"), 0.015, c=_t(kn + rig.Vector((0, -0.022, 0.005))),
+                radii=(0.08, 0.072 * ml, 0.06), axis=sn)
+        add(round_cone, b("shin"), 0.03, a=_t(kn), b=_t(an), r1=0.055 * ml, r2=0.047)
+        add(ellipsoid, b("shin"), 0.04,
+            c=_t(rig.lerp(b("shin"), 0.28) + rig.Vector((0, 0.035, 0))),
+            radii=(0.13, 0.05 * ml, 0.05 * mu), axis=sn)
+        # boot shaft, foot, heel, toe cap
+        add(round_cone, b("shin"), 0.02, a=_t(rig.lerp(b("shin"), 0.62)),
+            b=_t(an + rig.Vector((0, 0, -0.02))), r1=0.056, r2=0.058)
+        add(round_cone, b("foot"), 0.03, a=_t(an + rig.Vector((0, 0, -0.035))),
+            b=_t(rig.tail(b("foot")) + rig.Vector((0, 0, 0.005))), r1=0.056, r2=0.045)
+        add(sphere, b("foot"), 0.03, c=(s * 0.14, 0.035, 0.05), r=0.05)
+        add(round_cone, b("toe"), 0.03, a=_t(rig.head(b("toe"))), b=_t(rig.tail(b("toe"))),
+            r1=0.045, r2=0.035)
+
+    # eye sockets, flat soles
+    for side in rig.SIDES:
+        P.append(Prim(sphere, None, 0.012, op="sub",
+                      c=(rig.side_sign(side) * 0.032, -0.1, 1.79), r=0.017))
+    P.append(Prim(half_space, None, 0.006, op="and", normal=(0, 0, 1), offset=0.0))
+    return Shape(P)
+
+
+HAIR_FRONT = dict(normal=(0, 1, 0.8), offset=float(np.dot(np.array([0, 1, 0.8]) / np.linalg.norm([0, 1, 0.8]),
+                                                         [0, -0.07, 1.85])))
+
+
+def hair_shape(style):
+    P = []
+    scalp = dict(c=(0, 0.016, 1.805), radii=(0.091, 0.106, 0.106))
+    if style == "mullet":
+        P += [Prim(ellipsoid, "head", **scalp),
+              Prim(half_space, None, 0.01, op="and", **HAIR_FRONT),
+              Prim(half_space, None, 0.01, op="and", normal=(0, 0, 1), offset=1.75),
+              Prim(round_cone, "head", 0.04, a=(0, 0.06, 1.79), b=(0, 0.085, 1.58), r1=0.075, r2=0.058)]
+    elif style == "mohawk":
+        P += [Prim(ellipsoid, "head", c=(0, 0.02, 1.87), radii=(0.022, 0.115, 0.075)),
+              Prim(half_space, None, 0.01, op="and", normal=(0, 0, 1), offset=1.80)]
+    elif style == "flattop":
+        P += [Prim(ellipsoid, "head", c=(0, 0.012, 1.83), radii=(0.094, 0.108, 0.115)),
+              Prim(half_space, None, 0.008, op="and", normal=(0, 0, -1), offset=-1.95),
+              Prim(half_space, None, 0.01, op="and", **HAIR_FRONT),
+              Prim(half_space, None, 0.01, op="and", normal=(0, 0, 1), offset=1.76)]
+    elif style == "long":
+        P += [Prim(ellipsoid, "head", **scalp),
+              Prim(half_space, None, 0.01, op="and", **HAIR_FRONT),
+              Prim(half_space, None, 0.01, op="and", normal=(0, 0, 1), offset=1.74)]
+        for s in (1, -1):
+            P.append(Prim(round_cone, "head", 0.04, a=(s * 0.07, 0.03, 1.79),
+                          b=(s * 0.085, 0.06, 1.52), r1=0.04, r2=0.045))
+        P.append(Prim(round_cone, "head", 0.04, a=(0, 0.07, 1.79), b=(0, 0.09, 1.50), r1=0.07, r2=0.07))
+    else:
+        raise ValueError(style)
+    return Shape(P)
+
+
+HAIR_STYLES = ["mullet", "mohawk", "flattop", "long"]
+
+# ------------------------------------------------------------------ meshing helpers
+
+def _mesh_from_shape(name, shape, bmin, bmax, h, target_tris):
+    verts, quads = polygonize(shape, bmin, bmax, h)
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts.tolist(), [], quads.tolist())
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+
+    tris = len(quads) * 2
+    if tris > target_tris:
+        mod = ob.modifiers.new("decimate", "DECIMATE")
+        mod.ratio = target_tris / tris
+        dg = bpy.context.evaluated_depsgraph_get()
+        new_me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+        ob.modifiers.clear()
+        ob.data = new_me
+        bpy.data.meshes.remove(me)
+        me = new_me
+
+    # snap decimated vertices back onto the exact surface
+    co = _get_co(me)
+    _set_co(me, shape.project(co, iters=2))
+    for poly in me.polygons:
+        poly.use_smooth = True
+    me.update()
+    return ob
+
+
+def _get_co(me):
+    co = np.empty(len(me.vertices) * 3, np.float32)
+    me.vertices.foreach_get("co", co)
+    return co.reshape(-1, 3)
+
+
+def _set_co(me, co):
+    me.vertices.foreach_set("co", np.ascontiguousarray(co, np.float32).ravel())
+
+
+def _normals(me):
+    n = np.empty(len(me.vertices) * 3, np.float32)
+    me.vertices.foreach_get("normal", n)
+    return n.reshape(-1, 3)
+
+
+def _set_weights(ob, weights):
+    """weights: dict bone -> (N,) array."""
+    for bone, w in weights.items():
+        vg = ob.vertex_groups.new(name=bone)
+        idx = np.nonzero(w > 0.005)[0]
+        for i in idx:
+            vg.add([int(i)], float(w[i]), "REPLACE")
+
+
+def _skin_weights(dists, sigma=0.012, max_influences=4):
+    names = list(dists)
+    D = np.stack([dists[n] for n in names], 1)            # (N, B)
+    dmin = D.min(1, keepdims=True)
+    W = np.exp(-(D - dmin) / sigma)
+    if W.shape[1] > max_influences:
+        cut = np.partition(W, -max_influences, axis=1)[:, -max_influences][:, None]
+        W = np.where(W >= cut, W, 0)
+    W /= W.sum(1, keepdims=True)
+    return {n: W[:, i] for i, n in enumerate(names)}
+
+
+def _chain_t(co, weights, chain_names):
+    """0..1 position along a limb chain, blended by skin weights."""
+    lengths = [(rig.tail(n) - rig.head(n)).length for n in chain_names]
+    total = sum(lengths)
+    acc = np.zeros(len(co), np.float32)
+    wsum = np.zeros(len(co), np.float32)
+    start = 0.0
+    for n, ln in zip(chain_names, lengths):
+        if n in weights:
+            h = np.array(rig.head(n), np.float32)
+            d = np.array(rig.tail(n) - rig.head(n), np.float32) / ln
+            proj = np.clip((co - h) @ d, 0, ln)
+            acc += weights[n] * (start + proj) / total
+            wsum += weights[n]
+        start += ln
+    return np.where(wsum > 1e-4, acc / np.maximum(wsum, 1e-4), 0.0)
+
+
+def _write_attributes(me, co, weights):
+    def wsum(names):
+        return sum((weights[n] for n in names if n in weights), np.zeros(len(co), np.float32))
+
+    arms = [f"{b}.{s}" for s in rig.SIDES for b in ARM_CHAIN + ["thumb"]]
+    legs = [f"{b}.{s}" for s in rig.SIDES for b in LEG_CHAIN]
+    region = np.stack([wsum(arms), wsum(legs), wsum(["head", "neck"]),
+                       wsum(["hips", "spine", "chest", "clavicle.L", "clavicle.R"])], 1)
+    col = me.color_attributes.new("Color", "FLOAT_COLOR", "POINT")
+    col.data.foreach_set("color", region.astype(np.float32).ravel())
+    me.color_attributes.active_color = col
+
+    limb = np.zeros(len(co), np.float32)
+    for s in rig.SIDES:
+        for chain in (ARM_CHAIN, LEG_CHAIN):
+            names = [f"{b}.{s}" for b in chain]
+            t = _chain_t(co, weights, names)
+            limb = np.maximum(limb, t * np.clip(wsum(names), 0, 1))
+
+    uv0 = np.stack([co[:, 0] * 0.25 + 0.5, co[:, 2] * 0.25], 1)
+    uv1 = np.stack([limb, co[:, 1] * 0.25 + 0.5], 1)
+    loops = np.empty(len(me.loops), np.int64)
+    me.loops.foreach_get("vertex_index", loops)
+    for name, uv in (("UVMap", uv0), ("Body", uv1)):
+        layer = me.uv_layers.new(name=name)
+        layer.data.foreach_set("uv", uv[loops].astype(np.float32).ravel())
+
+
+def _material(name, color):
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    mat.diffuse_color = (*color, 1.0)
+    return mat
+
+
+def _bind(ob, armature):
+    ob.parent = armature
+    mod = ob.modifiers.new("Armature", "ARMATURE")
+    mod.object = armature
+
+
+# ------------------------------------------------------------------ builders
+
+def build_body(armature, quick=False):
+    h = 0.016 if quick else 0.008
+    target = 8000 if quick else 26000
+    base = body_shape(**BASE_PARAMS)
+    ob = _mesh_from_shape("body", base, (-0.95, -0.42, -0.03), (0.95, 0.3, 2.0), h, target)
+    me = ob.data
+    co = _get_co(me)
+
+    _, dists = base.eval(co, want_bones=True)
+    weights = _skin_weights(dists)
+    _set_weights(ob, weights)
+    _write_attributes(me, co, weights)
+    me.materials.append(_material("body", (0.8, 0.55, 0.42)))
+
+    # blend shapes
+    ob.shape_key_add(name="Basis", from_mix=False)
+    nrm = _normals(me)
+    for key, overrides in BLEND_SHAPES.items():
+        variant = body_shape(**{**BASE_PARAMS, **overrides})
+        p = co.copy()
+        for _ in range(5):
+            p -= nrm * variant.eval(p)[:, None]
+        sk = ob.shape_key_add(name=key, from_mix=False)
+        sk.data.foreach_set("co", p.astype(np.float32).ravel())
+
+    _bind(ob, armature)
+    return ob
+
+
+def build_hair(armature, style, quick=False):
+    h = 0.008 if quick else 0.0045
+    ob = _mesh_from_shape(f"hair_{style}", hair_shape(style),
+                          (-0.16, -0.14, 1.45), (0.16, 0.2, 2.0), h, 2500 if quick else 6000)
+    me = ob.data
+    _set_weights(ob, {"head": np.ones(len(me.vertices), np.float32)})
+    me.materials.append(_material("hair", (0.15, 0.1, 0.06)))
+    _bind(ob, armature)
+    return ob
+
+
+def build_eyes(armature):
+    """Two eyeballs facing forward. Color R = angle from the eye's forward axis / 90 deg."""
+    me = bpy.data.meshes.new("eyes")
+    bm = bmesh.new()
+    from mathutils import Matrix
+    for side in rig.SIDES:
+        s = rig.side_sign(side)
+        m = Matrix.Translation((s * 0.032, -0.079, 1.79)) @ Matrix.Rotation(np.pi / 2, 4, "X")
+        bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=0.0128, matrix=m)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new("eyes", me)
+    bpy.context.scene.collection.objects.link(ob)
+
+    # Point colors (corner colors export in a non-deterministic order).
+    co = _get_co(me)
+    centre = np.array([[0.032, -0.079, 1.79]], np.float32) * np.where(co[:, :1] > 0, 1, [[-1, 1, 1]])
+    local = co - centre
+    fwd = -local[:, 1] / np.maximum(np.linalg.norm(local, axis=1), 1e-6)
+    data = np.zeros((len(co), 4), np.float32)
+    data[:, 0] = np.degrees(np.arccos(np.clip(fwd, -1, 1))) / 90.0
+    data[:, 3] = 1
+    col = me.color_attributes.new("Color", "FLOAT_COLOR", "POINT")
+    col.data.foreach_set("color", data.ravel())
+    for poly in me.polygons:
+        poly.use_smooth = True
+    me.color_attributes.active_color = col
+    _set_weights(ob, {"head": np.ones(len(me.vertices), np.float32)})
+    me.materials.append(_material("eyes", (1, 1, 1)))
+    _bind(ob, armature)
+    return ob

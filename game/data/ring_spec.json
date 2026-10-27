@@ -1,0 +1,18 @@
+{
+  "_comment": "Ring dimensions in metres, shared by blender/wrestle_gen/ring.py and game/ring/ring.gd. Horizontal coordinates are centred on the ring; heights are above the arena floor unless noted.",
+  "post_half": 3.0,
+  "canvas_half": 3.45,
+  "canvas_thickness": 0.14,
+  "mat_height": 1.15,
+  "rope_heights": [0.48, 0.88, 1.28],
+  "rope_radius": 0.028,
+  "post_radius": 0.07,
+  "post_top": 1.45,
+  "pad_size": [0.20, 0.30, 0.13],
+  "pad_inset": 0.13,
+  "floor_mat_width": 2.2,
+  "barricade_half": 6.2,
+  "barricade_height": 1.05,
+  "aisle_width": 2.6,
+  "steps_width": 1.0
+}
