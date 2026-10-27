@@ -1,0 +1,144 @@
+# Design Document
+
+## Overview
+An original, 90s-style arcade pro wrestling game. Assets are generated procedurally with Blender; the game runs in Godot.
+
+**Core decisions:**
+- **Visuals:** stylized modern. Bold, chunky "action-figure" characters, modern lighting, bloom, volumetric spotlights and pyro, and 90s attitude (neon, CRT/VHS-style menus and replays).
+- **Combat:** a grapple-system core (strikes, weak/strong grapples, reversals, positional moves). Specials and finishers are flashy and exaggerated, with hit-stop, camera zooms and particles.
+- **Players:** local 1–4 players with gamepad or keyboard. Any slot can be human or CPU. No online play.
+- **Assets:** procedural and scripted only. Blender Python generates the models, rigs and pose-based animations. Free CC0 audio is allowed, and licenses are tracked.
+- **Modes:** an arcade 1v1 practice match, 2v2 tag team, and a career mode (ladder, belts and a light story).
+- **Roster:** about 8 original fictional wrestlers, plus create-a-wrestler (CAW). No real people or trademarks. This is an original game, not a remake of any existing title.
+- **Repo:** `intra-secdsm/slamquake` on GitHub, `main` branch, Git LFS for binary files.
+
+
+## Tech stack
+- **Godot 4.7 (standard build) with typed GDScript.** No C#/.NET, so headless runs and tests stay simple.
+- Rendering: Forward+ renderer and Jolt physics (both built in).
+- **Blender 5.2 LTS (official tarball)**, run headless: `blender -b -P blender/build.py`.
+- Tools (Godot, Blender, git-lfs) are installed without sudo into `~/.local/opt/<tool>/<ver>`, with symlinks in `~/.local/bin`. Versions are pinned in `tools/versions.env`, and `tools/setup.sh` downloads them and verifies their published checksums.
+- Godot export templates are installed so we can build Linux and Windows versions.
+- Testing: **GUT** (Godot Unit Test) addon, run with `godot --headless`.
+
+## Repo layout
+```
+wrestle/
+  game/                     Godot project (project.godot)
+    core/                   autoloads: GameState, InputRouter, AudioDirector, SaveSystem
+    wrestler/               Wrestler.tscn, state machine, MovePlayer, damage, AI
+    match/                  MatchDirector, rules (pin/submission/countout/DQ), Referee, Camera
+    ring/                   ring, ropes, turnbuckles, apron, ringside, props (chair, table)
+    data/                   moves/*.tres, wrestlers/*.tres, career/*.tres
+    ui/                     menus, HUD, CAW, career screens
+    fx/                     shaders (toon+rim, CRT/VHS post), particles
+    assets/generated/       .glb from Blender (LFS, committed)
+    assets/audio/           CC0 audio (LFS) + licenses.json
+    tests/                  GUT unit tests + headless sim tests
+  blender/                  bpy generators: rig, bodies, attire, ring, arena, props, poses
+  tools/                    setup.sh, build_assets.sh, export.sh, fetch_audio.py, screenshot.gd
+  docs/                     DESIGN.md, MOVES.md, ART_PIPELINE.md, CREDITS.md
+  .gitattributes            LFS: *.glb *.blend *.png *.jpg *.exr *.wav *.ogg *.mp3 *.ttf
+```
+The generated `.glb` files are committed through LFS. That way the game opens in Godot even without Blender, and regenerating them is deterministic.
+
+## Core architecture
+
+**Procedural characters (Blender):**
+- One shared humanoid armature with about 30 bones and standard names, so every wrestler shares one animation library.
+- The body is a parametric mesh with shape keys (height, mass, muscle, gut, shoulder width). These export as Godot blend shapes, so CAW sliders change the body live.
+- Modular attire meshes: trunks, singlet, tights, boots, kneepads, mask, jacket, wristbands and hair styles.
+- A shader tints colors and draws patterns, face paint and tattoos from a small texture atlas.
+
+**Animation (the hardest part with procedural-only assets):**
+- Animations are built from pose libraries. Key poses are written in Blender Python as bone rotations, then interpolated with easing curves and baked into actions. They export together in one GLB `AnimationLibrary`.
+- Paired grapple moves are authored in a shared "pair space": the attacker and defender tracks are relative to one anchor.
+- Runtime layers make the motion feel alive:
+  - foot IK and look-at
+  - additive hit reactions
+  - spring-based secondary motion (hair, belly, jacket)
+  - physics ragdoll (`PhysicalBoneSimulator3D`) blended in for knockdowns, falls to the floor and table spots
+- Hit-stop, camera shake, slow-mo on finishers, motion trails and impact particles cover some of the stiffness in the animation. This is a known quality risk, and the rig and data format keep the door open to hand-animated replacements later.
+
+**Moves are data-driven:**
+- A `MoveData` resource holds: context, input, animation names (attacker/defender), hit frames, damage per body part, momentum gain, reversal window, SFX cues, camera cue, and the end state for each wrestler.
+- A `WrestlerData` resource holds: name, gimmick, body parameters, attire, colors, stats, moveset (per context), finisher, special, taunt, entrance theme and pyro.
+- `MoveResolver` picks a move from context × input direction × button × moveset. Contexts include: front/back grapple (weak/strong), running, rebounding off the ropes, opponent in the corner, ground (head or legs), top rope (standing or diving), apron, outside, and holding a weapon.
+
+**Wrestler state machine:**
+- States: Idle/Move, Run, Strike, Block, GrappleInit, Grappling, Whip/RopeRebound, Stunned, Down, GettingUp, ClimbTurnbuckle, OnTopRope, Aerial, Apron, ThroughRopes, Outside, HoldingWeapon, Pinning/Pinned, Submission, Taunt, Ragdoll, Entrance, Celebrate.
+- `MovePlayer` snaps both wrestlers to the pair anchor, runs the timeline and handles reversal input.
+
+**Ring and environment:**
+- Ring: canvas floor, 3 ropes per side, 4 turnbuckles, apron, steel steps, padded floor, barricade.
+- Ropes are dynamic: a spring-driven deformation of the rope bones, Irish-whip rebounds, a slingshot off the ropes, and dazed/tangled-in-the-ropes states.
+- `Area3D` zones for turnbuckle climbing, the apron, rolling in and out, and slamming into the turnbuckle (corner whip).
+- **Props:** a folding chair (pick up, swing, throw, sit on, wedge in the corner) and a folding table (set up, put the opponent on it, splash or powerbomb through it). The table has a pre-fractured breakable mesh plus debris physics. Ring steps and a ladder are stretch goals.
+
+**Match rules:**
+- Per-body-part damage, stamina, and a **momentum meter**. A full meter stores a "Special", which unlocks the finisher.
+- Pinfall uses a kick-out timing/mash minigame that scales with damage. Submissions use a meter tug-of-war, with a rope break when a rope is in reach.
+- 20-count count-out, DQ rules, and no-DQ/hardcore toggles.
+- **Referee NPC** who counts, can be knocked down, and reacts to weapons.
+
+**Tag team:**
+- Legal-man rules, apron partners, tag hands, hot-tag boost.
+- Double-team moves, saves that break up pins, and the ref forcing the illegal man out. A countdown timer limits how long the illegal man can stay in.
+
+**AI:**
+- Utility-based: scores actions by health, momentum, distance, context and difficulty. Difficulty levels are Easy/Normal/Hard/Legend.
+- Has tag-partner logic and an option to make the CPU go for weapons.
+
+**Camera:**
+- A broadcast-style camera that keeps every active wrestler in frame and smooths its movement.
+- Cinematic cuts and zooms for finishers.
+- An instant replay of the finisher with a VHS filter. It plays back a ring buffer of recorded transforms.
+
+**Input:**
+- `InputRouter` maps up to 4 devices (gamepads and keyboard) to player slots.
+- Controls can be remapped and are saved.
+
+**Presentation and audio:**
+- Arena: a procedural venue with stands, an entrance ramp, a stage, and a "titantron" that shows procedural visuals rendered in a `SubViewport`.
+- Lighting: spotlights with volumetric fog, glow, SSAO, and baked lightmaps or SDFGI.
+- Crowd: low-poly fans drawn with `MultiMesh` and a GPU vertex-animation shader, waving signs and holding camera-flash particles. Their excitement follows the match's momentum.
+- Entrances: walk-out animation, pyro, lights and theme music.
+- `AudioDirector`:
+  - layered impact SFX by type (strike, slam, table break, chair hit, ropes)
+  - a dynamic crowd bed (murmur → cheer → "pop"), bell, ref counts
+  - CC0 or synthesized music stings, and entrance themes
+- All audio licenses are tracked in `assets/audio/licenses.json` and `docs/CREDITS.md`. `tools/fetch_audio.py` keeps a manifest with URLs and checksums.
+- Optional: offline TTS for announcer and ref callouts, after checking the voice license.
+
+## Modes
+1. **Arcade 1v1 practice:** choose wrestlers, CPU difficulty and rules. Practice extras: infinite health, a dummy behavior setting (idle/block/reverse/fight back), an on-screen move list and an input display.
+2. **Tag Team 2v2:** 1–4 humans, the rest CPU.
+3. **Career:**
+   - Pick a roster wrestler or a CAW.
+   - Weekly TV-show cards, plus a monthly PPV.
+   - Rivalries generated from story templates. Promo and storyline beats appear as text/comic-panel screens.
+   - Climb the rankings to earn shots at the Tag and World titles, then defend the belt.
+   - Unlock moves, attire and hidden wrestlers.
+   - Save/load as JSON under `user://`.
+4. **Create-a-Wrestler:** body sliders, attire pieces and colors, face paint, moveset builder, finisher, entrance music and pyro.
+5. **Options:** controls, audio, video. Plus a move list/help screen.
+
+## Milestones
+Each milestone has its own feature branch, merges to `main`, and gets a tag (`v0.N`). DESIGN.md and the tests grow along the way.
+
+- **M0: Setup.** Install Godot, Blender and git-lfs. Create the git repo and set up LFS. Add the skeleton layout, README, .gitignore/.gitattributes, GUT and the tools scripts. First push.
+- **M1: Asset pipeline proof.** Blender scripts generate the rig, one parametric wrestler, the ring with ropes and turnbuckles, and 3 animations, then export GLB. Godot loads and renders it with the toon shader. A headless screenshot shows the result.
+- **M2: Movement and strikes.** Basic 1v1 movement, strikes and blocks, the broadcast camera, the HUD, a CPU dummy and input for 2 players.
+- **M3: First fun (vertical slice).**
+  - Grapples with about 10 paired moves.
+  - Irish whip and rope rebound, the turnbuckle slam, and the ground game.
+  - Pinfall, the referee and rules → a complete 1v1 match.
+- **M4: Using the environment.** Climbing the top rope and aerial moves, apron moves, leaving and re-entering the ring, outside-the-ring spots, the folding chair, the breakable table, ragdoll and count-outs.
+- **M5: Specials and feel.** The momentum meter, specials and finishers with cinematics, reversals, and a polish pass on hit-stop, particles and layered SFX. AI v1 with difficulty levels.
+- **M6: Tag team.** 2v2 rules, double-teams and saves, 4 local players, and partner AI.
+- **M7: Presentation.** Arena, lighting, crowd, entrances, titantron, menus and front-end flow (90s neon/CRT style), music, plus a full audio pass.
+- **M8: Roster and CAW.** 8 original wrestlers, each with a unique gimmick, a unique finisher, a theme and a moveset. The Create-a-Wrestler editor.
+- **M9: Career mode.** Schedule, rankings, belts, rivalries, story beats, unlocks, saves.
+- **M10: Polish and release.** Balance, performance (target 60 fps), bug sweep, Linux and Windows export builds, and a `v1.0` tag.
+
+M3 is the key gate: the core grapple and animation approach must feel good there before content scales up.
