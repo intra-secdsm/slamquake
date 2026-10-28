@@ -15,6 +15,28 @@ static func get_entry(i: int) -> Dictionary:
 	return r[clampi(i, 0, r.size() - 1)]
 
 
+static func referee_look() -> WrestlerLook:
+	var l := WrestlerLook.new()
+	l.mass = -0.3
+	l.muscle = 0.0
+	l.gut = 0.25
+	l.height = 0.97
+	l.skin_color = Color(0.86, 0.66, 0.52)
+	l.hair_style = "flattop"
+	l.hair_color = Color(0.3, 0.3, 0.3)
+	l.shirt = true
+	l.stripes = 18
+	l.trunks_color = Color(0.06, 0.06, 0.07)
+	l.trim_color = Color(0.06, 0.06, 0.07)
+	l.tights = true
+	l.tights_color = Color(0.06, 0.06, 0.07)
+	l.boots_color = Color(0.02, 0.02, 0.02)
+	l.kneepads = false
+	l.wristbands = false
+	l.boot_top = 0.18
+	return l
+
+
 static func _thunder_mack() -> WrestlerLook:
 	var l := WrestlerLook.new()
 	l.muscle = 0.6

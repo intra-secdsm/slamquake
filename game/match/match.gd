@@ -1,17 +1,22 @@
 class_name Match
 extends Node3D
-## Sets up and runs a match from GameState.match_entrants.
-## M2: exhibition brawl. A KO (health 0) ends the round, then everyone resets.
-## Pinfalls and match rules arrive in M3.
+## Sets up and runs a match from GameState.match_entrants: wrestlers, referee, camera,
+## HUD and rules. 1v1, win by pinfall. Pins near the ropes are broken.
+
+signal match_ended(winner: Wrestler)
 
 const START_SPOTS := [Vector3(-1.5, 0, 0.5), Vector3(1.5, 0, -0.5), Vector3(-1.5, 0, -1.2), Vector3(1.5, 0, 1.2)]
+const ROPE_BREAK_MARGIN := 0.35
 
 var ring: Ring
 var camera: BroadcastCamera
 var hud: MatchHud
+var referee: Referee
 var wrestlers: Array[Wrestler] = []
-var _ko_timer := -1.0
+var winner: Wrestler
+var _pin: Dictionary = {}          # {attacker, defender}
 var _pause_menu: Control
+var _end_menu: Control
 
 
 func _ready() -> void:
@@ -42,8 +47,9 @@ func _ready() -> void:
 		w.global_position = spot + Vector3.UP * Ring.canvas_height()
 		w.rotation.y = atan2(-spot.x, -spot.z)
 		w.struck.connect(_on_struck)
-		w.knocked_down.connect(_on_knocked_down)
 		w.landed_on_canvas.connect(_on_landed)
+		w.pin_started.connect(_on_pin_started)
+		w.kicked_out.connect(_on_kicked_out)
 		wrestlers.append(w)
 		camera.targets.append(w)
 
@@ -53,9 +59,18 @@ func _ready() -> void:
 			if o != w:
 				w.opponents.append(o)
 
+	referee = Referee.new()
+	add_child(referee)
+	referee.global_position = Vector3(0, Ring.canvas_height(), -2.2)
+	referee.wrestlers = wrestlers
+	referee.counted.connect(_on_count)
+
 	hud = MatchHud.new()
 	add_child(hud)
+	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip\n"
+		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN")
 	hud.setup(wrestlers, "\n".join(help))
+	AudioDirector.play("bell", camera.global_position + Vector3.FORWARD * 3.0, -4.0)
 	hud.banner("FIGHT!", 1.2)
 	# the director keeps listening for unpause; everything else freezes
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -64,43 +79,91 @@ func _ready() -> void:
 	_build_pause_menu()
 
 
-func _process(delta: float) -> void:
-	if get_tree().paused:
+func _physics_process(_delta: float) -> void:
+	if get_tree().paused or _pin.is_empty():
 		return
-	if _ko_timer >= 0.0:
-		_ko_timer -= delta
-		if _ko_timer < 0.0:
-			for w in wrestlers:
-				w.restore_health()
-			hud.banner("ROUND 2... FIGHT!", 1.2)
+	var d: Wrestler = _pin["defender"]
+	hud.show_kickout(d, d.kickout_progress())
+	if referee.is_counting() and _near_ropes(d):
+		hud.banner("ROPE BREAK!", 1.2)
+		d.kick_out()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	for slot in InputRouter.SLOTS:
-		if event.is_action_pressed(InputRouter.action_name(slot, "pause")):
+		if event.is_action_pressed(InputRouter.action_name(slot, "pause")) and winner == null:
 			_toggle_pause()
 			get_viewport().set_input_as_handled()
 			return
 
 
+# ---------------------------------------------------------------- rules
+
+func _on_pin_started(attacker: Wrestler, defender: Wrestler) -> void:
+	if winner:
+		return
+	_pin = {"attacker": attacker, "defender": defender}
+	referee.start_count(defender)
+
+
+func _on_count(n: int) -> void:
+	if _pin.is_empty():
+		return
+	hud.banner(str(n) if n < 3 else "THREE!", 0.8 if n < 3 else 2.0)
+	if n >= 3:
+		_finish(_pin["attacker"], _pin["defender"])
+
+
+func _on_kicked_out(defender: Wrestler) -> void:
+	if _pin.is_empty() or _pin["defender"] != defender:
+		return
+	if referee.count == 2:
+		hud.banner("KICK OUT AT 2!", 1.2)
+	_pin = {}
+	hud.show_kickout(null, 0.0)
+	referee.stop_count()
+
+
+func _near_ropes(w: Wrestler) -> bool:
+	var lim := float(Ring.spec()["post_half"]) - Wrestler.ROPE_MARGIN
+	for p in [w.global_position, w.head_position()]:
+		if absf(p.x) > lim - 0.05 or absf(p.z) > lim - 0.05:
+			return true
+	return false
+
+
+func _finish(win: Wrestler, lose: Wrestler) -> void:
+	winner = win
+	_pin = {}
+	hud.show_kickout(null, 0.0)
+	lose.lose()
+	win.win()
+	AudioDirector.play("bell_triple", camera.global_position + Vector3.FORWARD * 3.0, -2.0)
+	camera.shake(0.6)
+	await get_tree().create_timer(1.2).timeout
+	hud.banner("WINNER: %s" % win.display_name.to_upper(), 3.5)
+	match_ended.emit(win)
+	await get_tree().create_timer(3.0).timeout
+	if is_inside_tree():
+		_show_end_menu()
+
+
+# ---------------------------------------------------------------- feedback
+
 func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked: bool) -> void:
 	if blocked:
 		return
 	var heavy := float(move.get("damage", 0)) >= 8.0
-	var at := (attacker.global_position + victim.global_position) * 0.5 + Vector3.UP * 1.45
+	var at := victim.body_center().lerp(attacker.global_position + Vector3.UP * 1.3, 0.25)
 	HitFx.spawn(self, at, heavy)
 	camera.shake(1.0 if heavy else 0.35)
-
-
-func _on_knocked_down(w: Wrestler) -> void:
-	if w.health <= 0.0 and _ko_timer < 0.0:
-		hud.banner("K.O.!", 2.5)
-		_ko_timer = 3.5
 
 
 func _on_landed(_w: Wrestler) -> void:
 	camera.shake(0.8)
 
+
+# ---------------------------------------------------------------- menus
 
 func _toggle_pause() -> void:
 	get_tree().paused = not get_tree().paused
@@ -110,33 +173,44 @@ func _toggle_pause() -> void:
 
 
 func _build_pause_menu() -> void:
+	_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Restart", _restart], ["Main Menu", _quit_to_menu]])
+
+
+func _show_end_menu() -> void:
+	_end_menu = _menu("%s WINS" % winner.display_name.to_upper(), [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
+	_end_menu.visible = true
+	_end_menu.get_child(0).get_child(1).grab_focus()
+
+
+func _menu(title_text: String, items: Array) -> Control:
 	var layer := CanvasLayer.new()
 	layer.layer = 10
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
-	_pause_menu = ColorRect.new()
-	(_pause_menu as ColorRect).color = Color(0, 0, 0, 0.6)
-	_pause_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_menu.visible = false
-	layer.add_child(_pause_menu)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.6)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.visible = false
+	layer.add_child(shade)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.position = Vector2(-160, -120)
-	box.custom_minimum_size = Vector2(320, 0)
+	box.position = Vector2(-220, -120)
+	box.custom_minimum_size = Vector2(440, 0)
 	box.add_theme_constant_override("separation", 14)
-	_pause_menu.add_child(box)
+	shade.add_child(box)
 	var title := Label.new()
-	title.text = "PAUSED"
+	title.text = title_text
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
+	title.add_theme_font_size_override("font_size", 52)
 	title.add_theme_color_override("font_color", Color("ff2bd6"))
 	box.add_child(title)
-	for item in [["Resume", _toggle_pause], ["Restart", _restart], ["Main Menu", _quit_to_menu]]:
+	for item in items:
 		var b := Button.new()
 		b.text = item[0]
 		b.add_theme_font_size_override("font_size", 30)
 		b.pressed.connect(item[1])
 		box.add_child(b)
+	return shade
 
 
 func _restart() -> void:

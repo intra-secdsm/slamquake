@@ -75,6 +75,25 @@ def rope(length, seed):
     return render(length, fn, seed)
 
 
+def bell(length, seed):
+    """Ring bell: inharmonic partials with long decays."""
+    partials = [(820, 1.0, 1.2), (1640 * 1.01, 0.5, 0.8), (2290, 0.35, 0.5), (3170, 0.2, 0.3), (410, 0.3, 1.0)]
+
+    def fn(t, rnd):
+        strike = rnd.uniform(-1, 1) * env(t, 0.0005, 0.006) * 0.5
+        return strike + sum(a * math.sin(2 * math.pi * f * t) * env(t, 0.001, d) for f, a, d in partials)
+    return render(length, fn, seed)
+
+
+def triple(samples, gap):
+    out = [0.0] * (len(samples) + 2 * int(gap * RATE))
+    for k in range(3):
+        o = k * int(gap * RATE)
+        for i, x in enumerate(samples):
+            out[o + i] += x
+    return out
+
+
 def normalize(samples, peak=0.9):
     m = max(abs(s) for s in samples) or 1.0
     return [s * peak / m for s in samples]
@@ -98,6 +117,9 @@ SOUNDS = {
     "body_fall": lambda: thump(90, 42, 0.55, 700, 0.9, 4, click=0.2),
     "whoosh": lambda: whoosh(0.22, 5),
     "rope": lambda: rope(0.45, 6),
+    "mat_slap": lambda: thump(240, 120, 0.12, 3500, 0.7, 7, click=0.9),
+    "bell": lambda: bell(1.6, 8),
+    "bell_triple": lambda: triple(bell(1.4, 9), 0.32),
 }
 
 if __name__ == "__main__":

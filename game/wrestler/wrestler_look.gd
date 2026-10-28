@@ -28,3 +28,7 @@ extends Resource
 @export_range(0.9, 1.15) var waist: float = 1.06
 @export_range(0.7, 0.95) var trunks_bottom: float = 0.86
 @export_range(0.25, 0.5) var boot_top: float = 0.40
+@export var shirt: bool = false
+@export var shirt_color: Color = Color(0.95, 0.95, 0.95)
+@export var stripe_color: Color = Color(0.05, 0.05, 0.05)
+@export_range(0, 24) var stripes: int = 0

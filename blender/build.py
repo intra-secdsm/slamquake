@@ -27,7 +27,9 @@ def build_wrestler(quick):
     for anim in anims.all_anims():
         poses.bake(armature, anim)
         manifest["animations"][anim.name] = {
-            "loop": anim.loop, "length": anim.length, "events": anim.events}
+            "loop": anim.loop, "length": anim.length, "events": anim.events,
+            "root_start": poses.root_info(anim.keys[0][1]),
+            "root_end": poses.root_info(anim.keys[-1][1])}
     export_glb(GENERATED / "wrestler.glb", objs, animations=True)
     write_json(GENERATED / "wrestler.json", manifest)
 

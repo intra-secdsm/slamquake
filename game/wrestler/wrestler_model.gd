@@ -77,6 +77,10 @@ func apply_look() -> void:
 	m.set_shader_parameter("waist", l.waist)
 	m.set_shader_parameter("trunks_bottom", l.trunks_bottom)
 	m.set_shader_parameter("boot_top", l.boot_top)
+	m.set_shader_parameter("shirt", 1.0 if l.shirt else 0.0)
+	m.set_shader_parameter("shirt_color", l.shirt_color)
+	m.set_shader_parameter("stripe_color", l.stripe_color)
+	m.set_shader_parameter("stripes", float(l.stripes))
 	_hair_mat.set_shader_parameter("hair_color", l.hair_color)
 	_eyes_mat.set_shader_parameter("iris_color", l.eye_color)
 

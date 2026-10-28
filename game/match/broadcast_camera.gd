@@ -3,8 +3,8 @@ extends Camera3D
 ## Hard-cam style camera: looks across the ring from the +Z side, keeps every
 ## tracked wrestler framed, eases smoothly, and can shake on big impacts.
 
-@export var height := 3.4
-@export var base_distance := 6.2
+@export var height := 1.45
+@export var base_distance := 4.4
 @export var spread_zoom := 0.75
 @export var follow_speed := 3.5
 
@@ -49,9 +49,9 @@ func _update(t: float) -> void:
 		hi = hi.max(n.global_position)
 	var centre := (lo + hi) * 0.5
 	var spread := maxf(hi.x - lo.x, (hi.z - lo.z) * 0.6)
-	var want_focus := Vector3(centre.x * 0.85, centre.y + 1.0, centre.z * 0.6)
+	var want_focus := Vector3(centre.x * 0.85, centre.y + 0.85, centre.z * 0.6)
 	var want_distance := base_distance + spread * spread_zoom
 	_focus = _focus.lerp(want_focus, t)
 	_distance = lerpf(_distance, want_distance, t)
-	var pos := _focus + Vector3(0, height + _distance * 0.18, _distance)
+	var pos := _focus + Vector3(0, height + _distance * 0.1, _distance)
 	look_at_from_position(pos, _focus)

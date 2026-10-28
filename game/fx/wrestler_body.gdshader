@@ -10,6 +10,8 @@ uniform vec3 boots_color : source_color = vec3(0.08, 0.08, 0.1);
 uniform vec3 pads_color : source_color = vec3(0.85, 0.05, 0.35);
 uniform vec3 tights_color : source_color = vec3(0.1, 0.1, 0.12);
 uniform vec3 brow_color : source_color = vec3(0.12, 0.08, 0.05);
+uniform vec3 shirt_color : source_color = vec3(0.95);
+uniform vec3 stripe_color : source_color = vec3(0.05);
 
 uniform float waist = 1.06;
 uniform float trunks_bottom = 0.86;
@@ -18,6 +20,8 @@ uniform float tights = 0.0;
 uniform float kneepads = 1.0;
 uniform float wristbands = 1.0;
 uniform float elbowpads = 0.0;
+uniform float shirt = 0.0;
+uniform float stripes = 0.0;   // vertical stripes around the shirt (0 = plain)
 uniform float skin_roughness = 0.42;
 uniform float rim_strength = 0.35;
 
@@ -80,7 +84,15 @@ void fragment() {
 	float elbow_m = arm * band(limb_t, 0.36, 0.45, 0.004) * elbowpads;
 	col = mix(col, pads_color, max(wrist_m, elbow_m));
 
-	float cloth = clamp(tight_m + trunks_m + boot_m + knee_m + wrist_m + elbow_m, 0.0, 1.0);
+	// shirt: torso above the waist plus short sleeves
+	float torso = 1.0 - arm - leg - head;
+	float shirt_m = shirt * max(clamp(torso, 0.0, 1.0) * step(waist - 0.01, z), arm * (1.0 - smoothstep(0.24, 0.26, limb_t)));
+	shirt_m *= 1.0 - head;
+	float ang = atan(rest.x, -rest.y) / 6.28318 + 0.5;
+	float stripe = stripes > 0.0 ? step(0.5, fract(ang * stripes)) : 0.0;
+	col = mix(col, mix(shirt_color, stripe_color, stripe), shirt_m);
+
+	float cloth = clamp(tight_m + trunks_m + boot_m + knee_m + wrist_m + elbow_m + shirt_m, 0.0, 1.0);
 	rough = mix(rough, 0.35, trunks_m);           // shiny spandex
 	rough = mix(rough, 0.55, boot_m + knee_m);
 	sss = mix(sss, 0.0, cloth);
