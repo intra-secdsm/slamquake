@@ -8,6 +8,7 @@ var _mode := 0
 var _p1 := 0
 var _p2 := 2
 var _difficulty := 2
+var _rules := 0
 var _rows: Array[Button] = []
 
 
@@ -25,7 +26,7 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_CENTER)
 	box.custom_minimum_size = Vector2(620, 0)
-	box.position = Vector2(-310, -330)
+	box.position = Vector2(-310, -360)
 	box.add_theme_constant_override("separation", 12)
 	layer.add_child(box)
 
@@ -45,7 +46,7 @@ func _ready() -> void:
 	box.add_child(sub)
 	box.add_child(Control.new())
 
-	for i in 5:
+	for i in 6:
 		var b := Button.new()
 		b.add_theme_font_size_override("font_size", 30)
 		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -83,9 +84,10 @@ func _refresh() -> void:
 	_rows[2].text = "◀  %s: %s  ▶" % [p2_label, names[_p2]]
 	_rows[3].text = "◀  CPU Difficulty: %s  ▶" % GameState.DIFFICULTIES[_difficulty]
 	_rows[3].disabled = _mode == 1 or _mode == 2
-	_rows[4].text = "Controls: gamepads 1–4, or keyboard (P1 WASD+JIKL, P2 arrows+numpad)"
-	_rows[4].add_theme_font_size_override("font_size", 18)
-	_rows[4].focus_mode = Control.FOCUS_NONE
+	_rows[4].text = "◀  Rules: %s  ▶" % GameState.RULES.values()[_rules]
+	_rows[5].text = "Controls: gamepads 1–4, or keyboard (P1 WASD+JIKL, P2 arrows+numpad)"
+	_rows[5].add_theme_font_size_override("font_size", 18)
+	_rows[5].focus_mode = Control.FOCUS_NONE
 
 
 func _on_row_input(event: InputEvent, row: int) -> void:
@@ -111,6 +113,7 @@ func _change(row: int, step: int) -> void:
 		1: _p1 = wrapi(_p1 + step, 0, n)
 		2: _p2 = wrapi(_p2 + step, 0, n)
 		3: _difficulty = wrapi(_difficulty + step, 1, GameState.DIFFICULTIES.size())
+		4: _rules = wrapi(_rules + step, 0, GameState.RULES.size())
 	_refresh()
 
 
@@ -124,4 +127,5 @@ func _start() -> void:
 		2: p2["difficulty"] = 0
 		3: p1["control"] = cpu
 	GameState.match_entrants = [p1, p2]
+	GameState.rules = GameState.RULES.keys()[_rules]
 	get_tree().change_scene_to_file("res://match/match.tscn")

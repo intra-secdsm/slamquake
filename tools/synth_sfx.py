@@ -85,6 +85,36 @@ def bell(length, seed):
     return render(length, fn, seed)
 
 
+def clang(length, seed):
+    """Steel chair shot: bright inharmonic ring over a hard thump."""
+    partials = [(523, 1.0, 0.18), (1187, 0.7, 0.12), (1871, 0.5, 0.09), (2711, 0.35, 0.06), (3990, 0.2, 0.04)]
+    lp = Lowpass(1200)
+
+    def fn(t, rnd):
+        hit = lp(rnd.uniform(-1, 1)) * env(t, 0.0005, 0.03) * 3
+        return hit + sum(a * math.sin(2 * math.pi * f * t) * env(t, 0.0005, d) for f, a, d in partials)
+    return render(length, fn, seed)
+
+
+def crash(length, seed):
+    """Table breaking: splintering cracks plus a heavy body thud."""
+    rnd0 = random.Random(seed)
+    cracks = sorted(rnd0.uniform(0.0, 0.18) for _ in range(9))
+    lp, lp2 = Lowpass(2500), Lowpass(500)
+    phase = [0.0]
+
+    def fn(t, rnd):
+        x = 0.0
+        for c in cracks:
+            if t >= c:
+                x += rnd.uniform(-1, 1) * math.exp(-(t - c) / 0.012)
+        phase[0] += 2 * math.pi * (70 + 40 * math.exp(-t / 0.04)) / RATE
+        thud = math.sin(phase[0]) * env(t, 0.002, 0.12) * 1.5
+        rumble = lp2(rnd.uniform(-1, 1)) * env(t, 0.01, 0.25) * 2
+        return lp(x) * 2 + thud + rumble
+    return render(length, fn, seed)
+
+
 def triple(samples, gap):
     out = [0.0] * (len(samples) + 2 * int(gap * RATE))
     for k in range(3):
@@ -119,6 +149,8 @@ SOUNDS = {
     "rope": lambda: rope(0.45, 6),
     "mat_slap": lambda: thump(240, 120, 0.12, 3500, 0.7, 7, click=0.9),
     "bell": lambda: bell(1.6, 8),
+    "chair_hit": lambda: clang(0.5, 10),
+    "table_crash": lambda: crash(0.9, 11),
     "bell_triple": lambda: triple(bell(1.4, 9), 0.32),
 }
 

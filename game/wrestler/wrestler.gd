@@ -11,11 +11,13 @@ signal landed_on_canvas(w: Wrestler)
 signal pin_started(attacker: Wrestler, defender: Wrestler)
 signal kicked_out(defender: Wrestler)
 signal move_performed(attacker: Wrestler, id: String)
+signal landed_outside(w: Wrestler, at: Vector3)
 
 enum State {
 	IDLE, RUN, STRIKE, BLOCK, HITSTUN, KNOCKDOWN, DOWN, GETUP, REBOUND, TAUNT,
 	GRAB_WHIFF, TIEUP, HELD, PAIRED, WHIPPED, CORNER_HIT, CORNERED, CORNER_EXIT,
 	STOMP, DOWN_HIT, PINNING, PINNED, KICKOUT, COVER_RELEASE, STUN, CELEBRATE,
+	EXIT_RING, ENTER_RING, FALL_OUT, CLIMB, PERCH, CLIMB_DOWN, DIVE, DIVE_LAND, ITEM_PICKUP, CHAIR_SWING,
 }
 
 const WALK_SPEED := 2.5
@@ -35,8 +37,18 @@ const TIEUP_TIMEOUT := 1.8
 const CORNER_TIME := 2.4
 const STUN_TIME := 1.1
 
-const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State.PINNED, State.KICKOUT]
-const BUSY := [State.TIEUP, State.HELD, State.PAIRED, State.PINNING, State.PINNED, State.CELEBRATE]
+const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State.PINNED, State.KICKOUT,
+	State.FALL_OUT, State.DIVE_LAND]
+const BUSY := [State.TIEUP, State.HELD, State.PAIRED, State.PINNING, State.PINNED, State.CELEBRATE,
+	State.EXIT_RING, State.ENTER_RING, State.CLIMB, State.CLIMB_DOWN, State.DIVE]
+## states whose motion is fully scripted (no gravity, collision response or ring clamping)
+const SCRIPTED := [State.PAIRED, State.HELD, State.TIEUP, State.PINNING, State.PINNED, State.EXIT_RING,
+	State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.PERCH, State.CLIMB_DOWN, State.DIVE]
+## states in which a held chair stays in hand
+const ITEM_OK := [State.IDLE, State.CHAIR_SWING, State.ITEM_PICKUP, State.EXIT_RING, State.ENTER_RING]
+const EDGE_PUSH_TIME := 0.35
+const CHAIR_SHOT := {"id": "chair_shot", "damage": 14.0, "knockdown": true, "knockback": 2.5, "hitstop": 0.13,
+	"sfx": "chair_hit", "weapon": true, "region": "head", "reach": 1.5, "arc": 65.0}
 
 @export var look: WrestlerLook
 @export var display_name := "Wrestler"
@@ -51,6 +63,8 @@ var health := MAX_HEALTH
 var invulnerable := false
 var infinite_health := false
 var match_over := false
+var outside := false             ## on the arena floor rather than in the ring
+var held_item: Chair
 
 var _move: Dictionary = {}
 var _hit_done := false
@@ -83,6 +97,18 @@ var _rebounds := 0
 var _corner := -1
 var _kickout_need := 0
 var _kickout_have := 0
+
+# environment
+var _edge_time := 0.0
+var _root_anim := ""
+var _root_start := Transform3D.IDENTITY
+var _root_impact_done := false
+var _item_target: Chair
+var _dive_from := Vector3.ZERO
+var _dive_to := Vector3.ZERO
+var _dive_time := 0.6
+var _dive_kind := ""
+var _dive_target: Wrestler
 
 
 func _ready() -> void:
@@ -220,8 +246,17 @@ func _physics_process(delta: float) -> void:
 		State.COVER_RELEASE: _st_anim_then_idle("cover_release")
 		State.STUN: _st_timed(STUN_TIME)
 		State.CELEBRATE: _st_celebrate(delta)
+		State.EXIT_RING, State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.CLIMB_DOWN: _st_root_anim(delta)
+		State.PERCH: _st_perch(delta)
+		State.DIVE: _st_dive(delta)
+		State.DIVE_LAND: _st_dive_land(delta)
+		State.ITEM_PICKUP: _st_item_pickup(delta)
+		State.CHAIR_SWING: _st_chair_swing(delta)
 
 	_push = _push.move_toward(Vector3.ZERO, 9.0 * delta)
+	if state in SCRIPTED:
+		velocity = Vector3.ZERO
+		return
 	if is_on_floor():
 		velocity.y = 0.0
 	else:
@@ -250,6 +285,8 @@ func _take_buffered() -> String:
 # ---------------------------------------------------------------- basic states
 
 func _enter(s: State, blend: float = -1.0) -> void:
+	if held_item and s not in ITEM_OK:
+		drop_item(facing() * 1.5 + Vector3.UP * 2.0)
 	state = s
 	state_time = 0.0
 	invulnerable = s == State.GETUP
@@ -261,6 +298,8 @@ func _enter(s: State, blend: float = -1.0) -> void:
 		State.CORNER_EXIT: ["corner_exit", 0.15], State.STOMP: ["stomp", 0.08], State.DOWN_HIT: ["down_hit", 0.04],
 		State.PINNING: ["cover_hold", 0.0], State.PINNED: ["down", 0.0], State.KICKOUT: ["kickout", 0.05],
 		State.COVER_RELEASE: ["cover_release", 0.0], State.STUN: ["groggy", 0.15], State.CELEBRATE: ["taunt", 0.2],
+		State.PERCH: ["perch", 0.1], State.DIVE_LAND: ["dive_land", 0.05], State.ITEM_PICKUP: ["item_pickup", 0.1],
+		State.CHAIR_SWING: ["chair_swing", 0.06],
 	}
 	if anims.has(s):
 		_play(anims[s][0], anims[s][1] if blend < 0.0 else blend, true)
@@ -271,13 +310,18 @@ func _st_idle(delta: float) -> void:
 	var action := _take_buffered()
 	if action != "" and _try_action(action):
 		return
+	var mv := c.move if c else Vector3.ZERO
+	if _edge_push(mv, delta):
+		return
+	if held_item:
+		_idle_with_item(mv, delta)
+		return
 	if c and c.block_held and action == "":
 		_enter(State.BLOCK)
 		return
 	if c and c.taunt:
 		_enter(State.TAUNT)
 		return
-	var mv := c.move if c else Vector3.ZERO
 	if c and c.run_held:
 		_run_dir = mv.normalized() if mv.length() > 0.3 else facing()
 		_face(_run_dir, 0.0, true)
@@ -306,6 +350,12 @@ func _st_idle(delta: float) -> void:
 func _try_action(action: String) -> bool:
 	var target := nearest_opponent()
 	var downed := target != null and target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE
+	if held_item:
+		if action == "punch" or action == "kick":
+			_enter(State.CHAIR_SWING)
+		elif action == "grapple":
+			drop_item(facing() * 0.8)
+		return true
 	match action:
 		"punch":
 			if downed:
@@ -325,7 +375,8 @@ func _try_action(action: String) -> bool:
 			_try_grapple(target)
 			return true
 		"block":
-			if downed:
+			# pinfalls only count in the ring
+			if downed and not outside and not target.outside:
 				_start_paired("cover", target)
 				return true
 	return false
@@ -457,15 +508,21 @@ func receive_strike(attacker: Wrestler, mv: Dictionary) -> void:
 	attacker.freeze(stop)
 	AudioDirector.play(mv.get("sfx", "hit_light"), global_position + Vector3.UP * 1.4)
 	struck.emit(attacker, self, mv, false)
+	if match_over:
+		return  # e.g. that shot was a disqualification
 
 	if state in [State.CORNERED, State.CORNER_HIT]:
 		# pinned against the turnbuckle: soak it up and stay in the corner
 		_enter(State.CORNER_HIT, 0.04)
 		return
+	var perched := state == State.PERCH
 	_face(from, 0.0, true)
 	_whipped = false
-	var knock: bool = mv.get("knockdown", false) or health <= 0.0 or _combo_hits >= 4 or running_into \
+	var knock: bool = mv.get("knockdown", false) or health <= 0.0 or _combo_hits >= 4 or running_into or perched \
 		or (mv.get("knockdown_if_stunned", false) and (was_stunned or _combo_hits >= 2))
+	if knock and not perched and _try_fall_over_ropes(-from, float(mv.get("knockback", 3.0))):
+		knocked_down.emit(self)
+		return
 	if knock:
 		_push = -from * float(mv.get("knockback", 3.0))
 		_combo_hits = 0
@@ -544,7 +601,8 @@ func _st_celebrate(_delta: float) -> void:
 
 func _try_grapple(target: Wrestler) -> void:
 	if target == null:
-		_enter(State.GRAB_WHIFF)
+		if not _try_pick_up_item() and not _try_climb():
+			_enter(State.GRAB_WHIFF)
 		return
 	var to := flat_dir_to(target)
 	var d := _flat(target.global_position - global_position, Vector3.ZERO).length()
@@ -553,13 +611,14 @@ func _try_grapple(target: Wrestler) -> void:
 	elif target.is_running() and target.facing().dot(-to) > 0.6 and d < 1.8:
 		_face(to, 0.0, true)
 		_start_paired("back_body_drop", target)
-	elif target.can_be_grappled() and d < GRAB_RANGE and facing().angle_to(to) < deg_to_rad(75):
+	elif target.can_be_grappled() and d < GRAB_RANGE and facing().angle_to(to) < deg_to_rad(75) \
+			and target.outside == outside:
 		_face(to, 0.0, true)
 		if target.facing().dot(to) > 0.3 and target.state != State.CORNERED:
 			_start_paired("german", target)
 		else:
 			_start_tieup(target)
-	else:
+	elif not _try_pick_up_item() and not _try_climb():
 		_enter(State.GRAB_WHIFF)
 
 
@@ -571,6 +630,8 @@ func _start_tieup(target: Wrestler) -> void:
 
 ## Put this wrestler at the pair anchor in a locked (non-colliding) state.
 func _lock(other: Wrestler, anchor: Transform3D, s: State, anim_name: String) -> void:
+	if held_item:
+		drop_item()
 	partner = other
 	_anchor = anchor
 	global_transform = anchor
@@ -594,7 +655,11 @@ func _st_tieup(_delta: float) -> void:
 	var action := _take_buffered()
 	if c and c.run_held and state_time > 0.1:
 		_whip_dir = dir.normalized() if has_dir else facing()
-		_start_paired("whip", partner)
+		var toss_normal := _rope_toss_normal(_whip_dir)
+		if toss_normal != Vector3.ZERO:
+			_start_rope_toss(toss_normal)
+		else:
+			_start_paired("whip", partner)
 	elif action == "punch":
 		_start_paired("body_slam" if has_dir else "headbutt", partner)
 	elif action == "kick":
@@ -625,15 +690,17 @@ func _start_paired(id: String, target: Wrestler) -> void:
 		# keep the defender where they are; move the attacker into position
 		var start := Grapples.root_xform(mv["root_start_d"], target.model_scale())
 		anchor = target._flat_xform() * start.affine_inverse()
-	# never put the pair's anchor off the canvas
-	var edge := _rope_limit() + 0.45
-	anchor.origin.x = clampf(anchor.origin.x, -edge, edge)
-	anchor.origin.z = clampf(anchor.origin.z, -edge, edge)
+	anchor.origin = _clamp_to_region(anchor.origin)
 	target._begin_paired(self, mv, anchor, "d")
 	_begin_paired(target, mv, anchor, "a")
 	_anchor_base = anchor
 	# moves on a downed opponent leave them where they lie (so pins under the ropes still break)
-	_anchor_shift = Vector3.ZERO if mv.get("in_place", false) else _inside_shift(anchor, mv, target)
+	if mv.get("in_place", false):
+		_anchor_shift = Vector3.ZERO
+	elif outside:
+		_anchor_shift = _outside_shift(anchor, mv, target)
+	else:
+		_anchor_shift = _inside_shift(anchor, mv, target)
 	_impact_done = false
 	_released = false
 	move_performed.emit(self, id)
@@ -649,7 +716,7 @@ func _inside_shift(anchor: Transform3D, mv: Dictionary, target: Wrestler) -> Vec
 		pts.append(x.origin)
 		pts.append(x.origin - x.basis.z * 0.8)   # head, if lying down
 	var shift := Vector3.ZERO
-	for axis in [0, 2]:
+	for axis: int in [0, 2]:
 		var hi := -INF
 		var lo := INF
 		for q in pts:
@@ -664,7 +731,64 @@ func _inside_shift(anchor: Transform3D, mv: Dictionary, target: Wrestler) -> Vec
 	return shift
 
 
+## On the floor, slide a move away from the ring so nobody lands under the apron.
+func _outside_shift(anchor: Transform3D, mv: Dictionary, target: Wrestler) -> Vector3:
+	var o := anchor.origin
+	var pts: Array[Vector3] = []
+	for x in [anchor * Grapples.root_xform(mv["root_end_a"], model_scale()),
+			anchor * Grapples.root_xform(mv["root_end_d"], target.model_scale())]:
+		pts.append(x.origin)
+		pts.append(x.origin - x.basis.z * 0.8)
+	var shift := Vector3.ZERO
+	# stay inside the barricade...
+	var bl := float(Ring.spec()["barricade_half"]) - 0.45
+	for axis: int in [0, 2]:
+		var hi := -INF
+		var lo := INF
+		for q in pts:
+			hi = maxf(hi, q[axis])
+			lo = minf(lo, q[axis])
+		if hi > bl:
+			shift[axis] = bl - hi
+		elif lo < -bl:
+			shift[axis] = -bl - lo
+	# ...and away from the apron on our side of the ring
+	var main := 0 if absf(o.x) > absf(o.z) else 2
+	var side := signf(o[main])
+	var rb := Ring.canvas_half() + 0.35
+	var worst := INF
+	for q in pts:
+		worst = minf(worst, (q[main] + shift[main]) * side)
+	if worst < rb:
+		shift[main] += (rb - worst) * side
+	return shift
+
+
+## Keep a point on the canvas (in the ring) or between apron and barricade (outside).
+func _clamp_to_region(p: Vector3) -> Vector3:
+	if outside:
+		var lim := float(Ring.spec()["barricade_half"]) - 0.4
+		p.x = clampf(p.x, -lim, lim)
+		p.z = clampf(p.z, -lim, lim)
+		var rb := Ring.canvas_half() + 0.32
+		if absf(p.x) < rb and absf(p.z) < rb:
+			if absf(p.x) > absf(p.z):
+				p.x = signf(p.x) * rb
+			else:
+				p.z = signf(p.z) * rb
+		return p
+	var edge := _rope_limit() + 0.45
+	return Vector3(clampf(p.x, -edge, edge), p.y, clampf(p.z, -edge, edge))
+
+
+## Region from position: past the apron, or down at floor height, counts as outside.
+func _update_region() -> void:
+	outside = Ring.is_outside(global_position) or global_position.y < Ring.canvas_height() - 0.5
+
+
 func _begin_paired(other: Wrestler, mv: Dictionary, anchor: Transform3D, role: String) -> void:
+	if held_item:
+		drop_item()
 	partner = other
 	_pair = mv
 	_anchor = anchor
@@ -708,6 +832,9 @@ func _st_paired(_delta: float) -> void:
 
 func _take_move_damage(attacker: Wrestler, mv: Dictionary) -> void:
 	_damage(float(mv["damage"]))
+	var land := attacker._anchor * Grapples.root_xform(mv["root_end_d"], model_scale())
+	if Ring.is_outside(land.origin):
+		landed_outside.emit(self, land.origin - land.basis.z * 0.35 * model_scale())
 	if mv.has("sfx"):
 		AudioDirector.play(mv["sfx"], body_center())
 	struck.emit(attacker, self, mv, false)
@@ -725,6 +852,7 @@ func _finish_pair() -> void:
 func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 	var end_info: Dictionary = mv["root_end_" + role]
 	global_transform = _anchor * Grapples.root_xform(end_info, model_scale())
+	_update_region()
 	_set_solid(true)
 	_pair = {}
 	var end: String = mv["end_" + role]
@@ -980,6 +1108,8 @@ func _rope_limit() -> float:
 
 
 func _hits_ropes() -> bool:
+	if outside:
+		return false
 	var lim := _rope_limit() - 0.01  # positions are float32; clamped values sit just under lim
 	var p := global_position
 	var n := Vector3.ZERO
@@ -1006,13 +1136,315 @@ func _hits_ropes() -> bool:
 
 
 func _confine_to_ring() -> void:
+	if state in SCRIPTED:
+		return
+	if outside:
+		_confine_outside()
+		return
 	var extra := 0.0
 	if state == State.REBOUND:
 		extra = 0.5
 	elif state in [State.CORNER_HIT, State.CORNERED]:
 		extra = 0.2
-	elif state in [State.PAIRED, State.HELD, State.TIEUP, State.PINNING, State.PINNED]:
-		return  # paired bodies sit at the shared anchor; their visible bodies are offset
 	var lim := _rope_limit() + extra
 	position.x = clampf(position.x, -lim, lim)
 	position.z = clampf(position.z, -lim, lim)
+
+
+func _confine_outside() -> void:
+	var lim := float(Ring.spec()["barricade_half"]) - 0.4
+	position.x = clampf(position.x, -lim, lim)
+	position.z = clampf(position.z, -lim, lim)
+	# keep out of the ring apron
+	var rb := Ring.canvas_half() + 0.32
+	if absf(position.x) < rb and absf(position.z) < rb:
+		if absf(position.x) > absf(position.z):
+			position.x = signf(position.x) * rb
+		else:
+			position.z = signf(position.z) * rb
+
+
+# ---------------------------------------------------------------- leaving / entering the ring
+
+## Walking into the ropes (or the apron from outside) for a moment rolls out (or in).
+func _edge_push(mv: Vector3, delta: float) -> bool:
+	var n := _edge_normal(mv)
+	if n == Vector3.ZERO:
+		_edge_time = 0.0
+		return false
+	_edge_time += delta
+	if _edge_time < EDGE_PUSH_TIME:
+		return false
+	_edge_time = 0.0
+	var axis := 0 if n.x != 0.0 else 2
+	if outside:
+		# snap to the apron so the roll-in lands just inside the ropes
+		position[axis] = -n[axis] * (_rope_limit() + _root_dist("enter_ring"))
+		_face(n, 0.0, true)
+		_start_root_anim(State.ENTER_RING, "enter_ring")
+	else:
+		position[axis] = n[axis] * _rope_limit()
+		_face(n, 0.0, true)
+		_start_root_anim(State.EXIT_RING, "exit_ring")
+	return true
+
+
+## Outward (in the ring) or inward (outside) direction we're pushing against, or zero.
+func _edge_normal(mv: Vector3) -> Vector3:
+	if mv.length() < 0.5:
+		return Vector3.ZERO
+	var p := global_position
+	var side_lim := float(Ring.spec()["post_half"]) - 0.6
+	for axis: int in [0, 2]:
+		var other: int = 2 - axis
+		if absf(p[other]) > side_lim:
+			continue
+		var n := Vector3.ZERO
+		if outside:
+			if absf(p[axis]) < Ring.canvas_half() + 0.9:
+				n[axis] = -signf(p[axis])
+		elif absf(p[axis]) >= _rope_limit() - 0.03:
+			n[axis] = signf(p[axis])
+		if n != Vector3.ZERO and mv.normalized().dot(n) > 0.7:
+			return n
+	return Vector3.ZERO
+
+
+func _root_dist(anim_name: String) -> float:
+	return float(_root_info(anim_name, "root_end")["pos"][2]) * model_scale()
+
+
+func _start_root_anim(s: State, anim_name: String) -> void:
+	_root_start = _flat_xform()
+	_root_anim = anim_name
+	_root_impact_done = false
+	_edge_time = 0.0
+	state = s
+	state_time = 0.0
+	invulnerable = false
+	_set_solid(false)
+	_play(anim_name, 0.08, true)
+
+
+func _st_root_anim(_delta: float) -> void:
+	var info: Dictionary = WrestlerModel.manifest()["animations"][_root_anim]
+	var land := _root_start * Grapples.root_xform(info["root_end"], model_scale())
+	if not _root_impact_done and info["events"].has("impact") and state_time >= float(info["events"]["impact"]):
+		_root_impact_done = true
+		_damage(6.0)
+		AudioDirector.play("body_fall", land.origin + Vector3.UP * 0.3)
+		landed_on_canvas.emit(self)
+		if Ring.is_outside(land.origin):
+			landed_outside.emit(self, land.origin - land.basis.z * 0.35)
+	if state_time < float(info["length"]) - 0.01:
+		return
+	global_transform = land
+	_update_region()
+	_set_solid(true)
+	match state:
+		State.FALL_OUT: _go_down(0.5)
+		State.CLIMB: _enter(State.PERCH, 0.0)
+		_: _enter(State.IDLE, 0.0)
+
+
+## A big hit near the ropes sends the victim over the top to the floor.
+func _try_fall_over_ropes(push_dir: Vector3, knockback: float) -> bool:
+	if outside or knockback < 3.5:   # only the biggest shots (clotheslines) go over
+		return false
+	var p := global_position
+	var lim := _rope_limit()
+	var side_lim := float(Ring.spec()["post_half"]) - 0.5
+	for axis: int in [0, 2]:
+		var other: int = 2 - axis
+		if absf(p[axis]) >= lim - 0.45 and absf(p[other]) < side_lim and push_dir[axis] * signf(p[axis]) > 0.6:
+			var n := Vector3.ZERO
+			n[axis] = signf(p[axis])
+			position[axis] = n[axis] * lim
+			_face(-n, 0.0, true)       # back to the ropes
+			_combo_hits = 0
+			_start_root_anim(State.FALL_OUT, "fall_over_ropes")
+			return true
+	return false
+
+
+## In a tie-up next to the ropes, a whip toward them becomes a toss over the top.
+func _rope_toss_normal(dir: Vector3) -> Vector3:
+	if outside:
+		return Vector3.ZERO
+	var victim := _anchor * Grapples.root_xform(_root_info("tieup_d", "root_end"), partner.model_scale())
+	var lim := _rope_limit()
+	var side_lim := float(Ring.spec()["post_half"]) - 0.6
+	for axis: int in [0, 2]:
+		var other: int = 2 - axis
+		var n := Vector3.ZERO
+		n[axis] = signf(victim.origin[axis])
+		if absf(victim.origin[axis]) > lim - 0.9 and absf(victim.origin[other]) < side_lim and dir.dot(n) > 0.6:
+			return n
+	return Vector3.ZERO
+
+
+func _start_rope_toss(n: Vector3) -> void:
+	# square up to the ropes so the opponent goes straight over the top
+	var axis := 0 if n.x != 0.0 else 2
+	_face(n, 0.0, true)
+	position[axis] = n[axis] * (_rope_limit() - 0.1 - TIEUP_DIST_M * partner.model_scale())
+	_start_paired("rope_toss", partner)
+
+
+const TIEUP_DIST_M := 0.8
+
+
+# ---------------------------------------------------------------- turnbuckles
+
+func _try_climb() -> bool:
+	if outside:
+		return false
+	for i in 4:
+		var spot := _corner_spot(i)
+		var to := spot - global_position
+		to.y = 0
+		if to.length() < 1.1 and facing().dot(to.normalized()) > 0.2:
+			var dir := to.normalized()
+			global_position = Vector3(spot.x, global_position.y, spot.z) - dir * 0.6
+			_face(dir, 0.0, true)
+			_start_root_anim(State.CLIMB, "climb_corner")
+			return true
+	return false
+
+
+func _st_perch(_delta: float) -> void:
+	if match_over:
+		return
+	var a := _take_buffered()
+	if a == "punch" or a == "kick":
+		_start_dive(a)
+		return
+	var c := controller
+	if a == "grapple" or a == "block" or state_time > 6.0 or (c and c.move.length() > 0.5 and c.move.dot(facing()) < -0.6):
+		_start_root_anim(State.CLIMB_DOWN, "climb_down")
+
+
+func _start_dive(button: String) -> void:
+	var t := nearest_opponent()
+	var y := Ring.canvas_height()
+	var lim := _rope_limit()
+	_dive_target = t
+	_dive_kind = "whiff"
+	var to := global_position + facing() * 2.4
+	if t and not t.outside:
+		var flat_d := Vector2(t.global_position.x - global_position.x, t.global_position.z - global_position.z).length()
+		if t.is_down() and flat_d < 5.5:
+			to = t.body_center()
+			_dive_kind = "elbow" if button == "punch" else "splash"
+		elif t.is_standing() and t.state not in BUSY and flat_d < 5.5:
+			to = t.global_position
+			_dive_kind = "crossbody"
+	to = Vector3(clampf(to.x, -lim, lim), y + (0.95 if _dive_kind == "crossbody" else 0.22), clampf(to.z, -lim, lim))
+	_dive_from = global_position + Vector3.UP * 0.5
+	_dive_to = to
+	_face(to - global_position, 0.0, true)
+	_dive_time = 0.42 + Vector2(to.x - global_position.x, to.z - global_position.z).length() * 0.06
+	state = State.DIVE
+	state_time = 0.0
+	_play("dive_elbow" if _dive_kind == "elbow" else "dive_splash", 0.1, true)
+	move_performed.emit(self, "dive_" + _dive_kind)
+
+
+func _st_dive(_delta: float) -> void:
+	var s := clampf(state_time / _dive_time, 0.0, 1.0)
+	global_position = _dive_from.lerp(_dive_to, s) + Vector3.UP * 0.8 * 4.0 * s * (1.0 - s)
+	if s < 1.0:
+		return
+	var t := _dive_target
+	var hit := false
+	match _dive_kind:
+		"crossbody":
+			if t and t.can_be_hit() and Vector2(t.global_position.x - _dive_to.x, t.global_position.z - _dive_to.z).length() < 1.1:
+				t.receive_strike(self, {"id": "crossbody", "damage": 13.0, "knockdown": true, "knockback": 1.5,
+					"hitstop": 0.12, "sfx": "hit_heavy", "region": "body"})
+				hit = true
+		"elbow", "splash":
+			if t and t.is_down() and t.distance_to_body(_dive_to) < 0.9:
+				t.receive_ground_hit(self, 16.0 if _dive_kind == "elbow" else 14.0)
+				hit = true
+	if not hit:
+		_damage(7.0)
+		AudioDirector.play("body_fall", global_position)
+	landed_on_canvas.emit(self)
+	_set_solid(true)
+	_enter(State.DIVE_LAND, 0.05)
+
+
+func _st_dive_land(_delta: float) -> void:
+	_hold_still()
+	if state_time >= _anim_length("dive_land"):
+		_go_down()
+		_down_left = 0.7
+
+
+# ---------------------------------------------------------------- chairs
+
+func _try_pick_up_item() -> bool:
+	for node in get_tree().get_nodes_in_group("chairs"):
+		var chair := node as Chair
+		if chair.is_free() and Vector2(chair.global_position.x - global_position.x,
+				chair.global_position.z - global_position.z).length() < 1.0 \
+				and absf(chair.global_position.y - global_position.y) < 0.8:
+			_item_target = chair
+			_face(chair.global_position - global_position, 0.0, true)
+			_enter(State.ITEM_PICKUP)
+			return true
+	return false
+
+
+func _st_item_pickup(_delta: float) -> void:
+	_hold_still()
+	var grab := _event("item_pickup", "grab", 0.3)
+	if _item_target and state_time >= grab and held_item == null:
+		if _item_target.is_free():
+			_item_target.pick_up(self)
+			held_item = _item_target
+		_item_target = null
+	if state_time >= _anim_length("item_pickup"):
+		_enter(State.IDLE)
+
+
+func _idle_with_item(mv: Vector3, delta: float) -> void:
+	velocity.x = mv.x * WALK_SPEED * 0.85 + _push.x
+	velocity.z = mv.z * WALK_SPEED * 0.85 + _push.z
+	var target := nearest_opponent()
+	if mv.length() > 0.15:
+		_face(mv, delta * 10.0)
+	elif target and global_position.distance_to(target.global_position) < LOCK_ON_RANGE:
+		_face(flat_dir_to(target), delta * 4.0)
+	_play("chair_walk" if mv.length() > 0.15 else "chair_hold", 0.2)
+
+
+func _st_chair_swing(_delta: float) -> void:
+	_hold_still()
+	var hit := _event("chair_swing", "hit", 0.4)
+	if state_time >= hit and state_time - get_physics_process_delta_time() < hit:
+		var landed := false
+		for o in opponents:
+			if not o.can_be_hit():
+				continue
+			var to := o.global_position - global_position
+			to.y = 0
+			if to.length() <= float(CHAIR_SHOT["reach"]) and rad_to_deg(facing().angle_to(to)) <= float(CHAIR_SHOT["arc"]):
+				o.receive_strike(self, CHAIR_SHOT)
+				landed = true
+		if not landed:
+			AudioDirector.play("whoosh", global_position + Vector3.UP * 1.5, -6.0)
+		else:
+			move_performed.emit(self, "chair_shot")
+	if state_time >= _anim_length("chair_swing"):
+		_enter(State.IDLE)
+
+
+func drop_item(throw_velocity: Vector3 = Vector3.ZERO) -> void:
+	if held_item == null:
+		return
+	var item := held_item
+	held_item = null
+	item.drop(get_parent(), throw_velocity)
+

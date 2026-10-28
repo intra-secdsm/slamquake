@@ -5,7 +5,7 @@ extends Node3D
 
 signal counted(n: int)
 
-enum Mode { FOLLOW, TO_PIN, COUNT, SIGNAL }
+enum Mode { FOLLOW, TO_PIN, COUNT, SIGNAL, WATCH_OUTSIDE }
 
 const WALK := 2.2
 const RUN := 5.0
@@ -26,6 +26,19 @@ func _ready() -> void:
 	model.look = Roster.referee_look()
 	add_child(model)
 	_play("idle", 0.0)
+
+
+## Stand at the ropes nearest a wrestler on the floor (count-outs).
+func watch_outside(w: Wrestler) -> void:
+	if mode in [Mode.FOLLOW, Mode.WATCH_OUTSIDE]:
+		mode = Mode.WATCH_OUTSIDE
+		_pinned = w
+
+
+func stop_watching() -> void:
+	if mode == Mode.WATCH_OUTSIDE:
+		mode = Mode.FOLLOW
+		_pinned = null
 
 
 func start_count(pinned: Wrestler) -> void:
@@ -55,6 +68,9 @@ func _physics_process(delta: float) -> void:
 		Mode.FOLLOW: _follow(delta)
 		Mode.TO_PIN: _to_pin(delta)
 		Mode.COUNT: _count(delta)
+		Mode.WATCH_OUTSIDE:
+			if _pinned:
+				_move_toward(_clamp_inside(_pinned.global_position), WALK, delta, _pinned.global_position)
 		Mode.SIGNAL:
 			_t += delta
 			if _t > 1.6:

@@ -14,6 +14,18 @@ var difficulty: int
 var profile: Dictionary
 var _think := 0.0
 var _plan_time := 0.0
+var _outside_time := 0.0
+var _linger := 2.0               # how long to brawl outside before heading back in
+var _follow_outside := false
+var _target_was_outside := false
+var _climb_corner := -1
+var _climb_think := 0.0
+var _chair_chase := 0.0
+var _chair_cooldown := 0.0
+var _last_pos := Vector3.ZERO
+var _still_time := 0.0
+var _sidestep := 0.0
+var _sidestep_dir := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 
 
@@ -38,6 +50,14 @@ func update(w: Wrestler, delta: float) -> void:
 		Wrestler.State.DOWN, Wrestler.State.PINNED:
 			mash = _rng.randf() < profile["mash"] * delta
 			return
+		Wrestler.State.PERCH:
+			move = Vector3.ZERO
+			if w.state_time > profile["reaction"] + 0.3:
+				if _rng.randf() < 0.5:
+					punch = true
+				else:
+					kick = true
+			return
 		Wrestler.State.TIEUP:
 			_tieup(w, target)
 			return
@@ -54,6 +74,11 @@ func update(w: Wrestler, delta: float) -> void:
 	to.y = 0
 	var dist := to.length()
 	var dir := to / maxf(dist, 0.001)
+
+	if _unstick(w, delta):
+		return
+	if _environment(w, target, dist, dir, delta):
+		return
 
 	# react to incoming strikes
 	if target.state == Wrestler.State.STRIKE and dist < 1.8 and _think <= 0.0:
@@ -96,6 +121,166 @@ func update(w: Wrestler, delta: float) -> void:
 			_choose_neutral_attack(dir)
 
 
+## Ring-exit, chair and turnbuckle decisions. Returns true if it set this frame's intent.
+func _environment(w: Wrestler, target: Wrestler, dist: float, dir: Vector3, delta: float) -> bool:
+	run_held = false
+	if target.outside != w.outside:
+		block_held = false
+	# opponent just left the ring: decide whether to follow or wait for the count
+	if target.outside and not _target_was_outside:
+		_follow_outside = _rng.randf() < (0.35 if GameState.rules != "normal" else 0.55)
+	_target_was_outside = target.outside
+	if w.outside:
+		_outside_time += delta
+	else:
+		_outside_time = 0.0
+		_linger = _rng.randf_range(1.5, 5.0)
+
+	if w.held_item:
+		if target.is_down() or (target.state == Wrestler.State.KNOCKDOWN):
+			# can't swing at someone lying down: ditch it and get on with the ground game
+			grapple = _think <= 0.0
+			_think = profile["reaction"]
+			return true
+		if target.outside != w.outside:
+			move = _toward_ring(w) if w.outside else _toward_floor(w, target)
+		else:
+			move = dir if dist > 1.2 else Vector3.ZERO
+			punch = dist <= 1.3 and target.can_be_hit() and _think <= 0.0
+			if punch:
+				_think = profile["reaction"]
+		return true
+
+	if w.outside:
+		_chair_cooldown -= delta
+		var chair := _free_chair(w, 4.0) if _chair_cooldown <= 0.0 else null
+		var want_chair := chair != null and _rng.randf() < (0.5 if GameState.rules != "normal" else 0.04) * delta * 4.0
+		if chair and (want_chair or _chair_chase > 0.0):
+			_chair_chase += delta
+			var to_chair := chair.global_position - w.global_position
+			to_chair.y = 0
+			move = to_chair.normalized()
+			grapple = to_chair.length() < 0.8
+			if grapple or _chair_chase > 3.0:
+				if not grapple:
+					_chair_cooldown = 10.0     # couldn't get to it; forget it for a while
+				_chair_chase = 0.0
+			return true
+		_chair_chase = 0.0
+		var m := w.get_parent() as Match
+		var count := m.outside_count() if m else 0
+		if not target.outside or _outside_time > _linger + 2.0 or count >= 12 - difficulty * 2:
+			move = _toward_ring(w)
+			return true
+		return false            # brawl on the floor
+
+	if target.outside and not target.is_down():
+		var mm := w.get_parent() as Match
+		if _follow_outside and (mm == null or mm.outside_count() < 8):
+			move = _toward_floor(w, target)
+		else:
+			move = dir * 0.0
+			taunt = _rng.randf() < 0.2 * delta
+		return true
+
+	if target.state == Wrestler.State.PERCH:
+		move = dir if dist > 1.0 else Vector3.ZERO
+		punch = dist <= 1.2 and _think <= 0.0
+		if punch:
+			_think = profile["reaction"]
+		return true
+
+	# go up top on a downed opponent near a corner
+	if target.is_down() and not target.outside:
+		_climb_think -= delta
+		if _climb_corner < 0 and _climb_think <= 0.0:
+			_climb_think = 1.0
+			if _rng.randf() < 0.12 * (1.0 + difficulty * 0.3):
+				_climb_corner = _corner_near(target.body_center(), 3.6)
+		if _climb_corner >= 0:
+			var spot := w._corner_spot(_climb_corner)
+			var to_spot := spot - w.global_position
+			to_spot.y = 0
+			move = to_spot.normalized()
+			if to_spot.length() < 0.9:
+				grapple = true
+				_climb_corner = -1
+			return true
+	else:
+		_climb_corner = -1
+	return false
+
+
+## If we've been trying to walk somewhere without moving, sidestep for a moment.
+func _unstick(w: Wrestler, delta: float) -> bool:
+	if _sidestep > 0.0:
+		_sidestep -= delta
+		move = _sidestep_dir
+		return true
+	var moved := w.global_position.distance_to(_last_pos)
+	if move.length() > 0.5 and moved < 0.4 * delta:
+		_still_time += delta
+	else:
+		_still_time = 0.0
+	_last_pos = w.global_position
+	if _still_time > 1.5:
+		_still_time = 0.0
+		_sidestep = 0.8
+		_sidestep_dir = move.rotated(Vector3.UP, PI / 2 * (1.0 if _rng.randf() < 0.5 else -1.0)) * 0.5 - move * 0.5
+		_sidestep_dir = _sidestep_dir.normalized()
+		return true
+	return false
+
+
+func _free_chair(w: Wrestler, radius: float) -> Chair:
+	for node in w.get_tree().get_nodes_in_group("chairs"):
+		var c := node as Chair
+		if c.is_free() and c.global_position.distance_to(w.global_position) < radius \
+				and absf(c.global_position.y - w.global_position.y) < 0.5:
+			return c
+	return null
+
+
+func _corner_near(p: Vector3, radius: float) -> int:
+	for i in 4:
+		var c := Ring.corner(i) - p
+		c.y = 0
+		if c.length() < radius:
+			return i
+	return -1
+
+
+## Walk toward the nearest side of the ring (away from the corners) to climb back in.
+func _toward_ring(w: Wrestler) -> Vector3:
+	var p := w.global_position
+	var axis := 0 if absf(p.x) > absf(p.z) else 2
+	var other := 2 - axis
+	var v := Vector3.ZERO
+	v[axis] = -signf(p[axis])
+	# aim for the middle of a side: the steel steps sit near the corners
+	if absf(p[other]) > 1.2:
+		v[other] = -signf(p[other]) * 1.0
+		if absf(p[axis]) < Ring.canvas_half() + 1.5:
+			v[axis] = signf(p[axis]) * 0.4      # step back out around the steps
+		else:
+			v[axis] *= 0.2
+	return v.normalized()
+
+
+## Head out to the floor on the side nearest the opponent.
+func _toward_floor(w: Wrestler, target: Wrestler) -> Vector3:
+	var p := target.global_position
+	var axis := 0 if absf(p.x) > absf(p.z) else 2
+	var v := Vector3.ZERO
+	v[axis] = signf(p[axis])
+	var other := 2 - axis
+	var side_lim := float(Ring.spec()["post_half"]) - 1.0
+	var q := w.global_position
+	if absf(q[other]) > side_lim:
+		v[other] = -signf(q[other]) * 0.8
+	return v.normalized()
+
+
 func _choose_neutral_attack(dir: Vector3) -> void:
 	if _rng.randf() < profile["run"]:
 		# bounce off the ropes behind us and come back with a clothesline
@@ -120,7 +305,14 @@ func _tieup(w: Wrestler, target: Wrestler) -> void:
 		return
 	var r := _rng.randf()
 	var hurt := target.health < 60.0
-	if r < 0.28:
+	var toss := w._rope_toss_normal(target.global_position - w.global_position) if not w.outside else Vector3.ZERO
+	for n in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+		if toss == Vector3.ZERO:
+			toss = w._rope_toss_normal(n)
+	if toss != Vector3.ZERO and r < 0.2:
+		run_held = true
+		move = toss
+	elif r < 0.28:
 		# Irish whip: often into a corner, otherwise into the ropes
 		run_held = true
 		if _rng.randf() < 0.45:
@@ -162,6 +354,8 @@ func _ground_game(w: Wrestler, target: Wrestler) -> void:
 		return
 	_think = profile["reaction"] * 1.5
 	var pin_chance := 0.6 if target.health < 35.0 else (0.2 if target.health < 60.0 else 0.03)
+	if w.outside or target.outside:
+		pin_chance = 0.0
 	var r := _rng.randf()
 	if r < pin_chance:
 		block_pressed = true

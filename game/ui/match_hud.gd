@@ -15,6 +15,7 @@ var _root: Control
 var _kick_box: Control
 var _kick_fill: ColorRect
 var _kick_label: Label
+var _count_label: Label
 
 
 func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
@@ -39,6 +40,16 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 	_root.add_child(_banner)
 
 	_build_kickout_meter()
+	_count_label = Label.new()
+	_count_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_count_label.position = Vector2(-200, 30)
+	_count_label.size = Vector2(400, 60)
+	_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_count_label.add_theme_font_size_override("font_size", 40)
+	_count_label.add_theme_color_override("font_color", Color("ffd400"))
+	_count_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_count_label.add_theme_constant_override("outline_size", 10)
+	_root.add_child(_count_label)
 
 	_help = Label.new()
 	_help.text = help_text + "\n\nF1: hide controls    Esc / Start: pause"
@@ -76,6 +87,11 @@ func _build_kickout_meter() -> void:
 	_kick_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_kick_label.add_theme_constant_override("outline_size", 8)
 	_kick_box.add_child(_kick_label)
+
+
+## Ring-out count (0 hides it).
+func show_count(n: int) -> void:
+	_count_label.text = "OUTSIDE: %d" % n if n > 0 else ""
 
 
 ## Show the pinned wrestler's kick-out progress (null hides the meter).

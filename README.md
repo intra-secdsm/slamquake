@@ -45,7 +45,15 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 kick + direction = DDT, run (+ direction) = Irish whip into the ropes or a corner, grapple = shove away.
 **Opponent down:** grapple = pick up, punch = elbow drop, kick = stomp, block = pin.
 Whipped opponents coming back off the ropes can be clotheslined (punch/kick) or back body dropped (grapple).
-Win by pinfall; pins with the head or body under the ropes are broken.
+**Using the ring:** hold a direction into the ropes for a moment to roll out to the floor (and into the
+apron to roll back in). Whip an opponent toward nearby ropes from a tie-up to toss them over the top;
+big hits near the ropes knock people out too. Grapple next to a corner to climb up, then punch/kick to
+dive (crossbody onto a standing opponent, elbow drop/splash onto a downed one); strike a perched opponent
+to knock them off. Grapple next to the chair to pick it up, punch to swing, grapple to drop it.
+Land someone on the ringside table to smash it.
+
+Win by pinfall (pins under the ropes are broken). Normal rules add a 20-count count-out and
+disqualification for chair shots; No DQ allows anything and has no count-outs.
 
 Gamepad N always controls player N. F1 toggles the on-screen controls.
 
@@ -73,7 +81,7 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M1 | Blender → Godot asset pipeline (rig, wrestler, ring) | ✅ |
 | M2 | Movement, strikes, camera, HUD | ✅ |
 | M3 | Grapples, whips, rope rebounds, pinfalls: first full match | ✅ |
-| M4 | Top rope, apron, outside, chair, tables, ragdoll | |
+| M4 | Top rope, outside the ring, chair, tables, count-outs | ✅ |
 | M5 | Momentum, finishers, reversals, game feel, AI | |
 | M6 | Tag team, 4 local players | |
 | M7 | Arena, crowd, entrances, menus, audio | |

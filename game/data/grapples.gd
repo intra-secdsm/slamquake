@@ -14,6 +14,7 @@ const ALL := {
 	"german": {"damage": 16.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
 	"back_body_drop": {"damage": 11.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
 	"whip": {"damage": 0.0, "end_a": "idle", "end_d": "whipped"},
+	"rope_toss": {"damage": 12.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall", "in_place": true},
 	"pickup": {"damage": 0.0, "end_a": "tieup", "end_d": "held", "align": "attacker"},
 	"cover": {"damage": 0.0, "end_a": "pinning", "end_d": "pinned", "align": "attacker", "in_place": true},
 	"elbow_drop": {"damage": 9.0, "end_a": "idle", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
@@ -41,8 +42,9 @@ static func get_move(id: String) -> Dictionary:
 ## Root bone placement from the manifest as a transform, scaled by the model's height.
 static func root_xform(info: Dictionary, model_scale: float) -> Transform3D:
 	var p: Array = info["pos"]
+	# height changes (leaving the ring, climbing) are absolute; distances scale with the body
 	return Transform3D(Basis(Vector3.UP, deg_to_rad(float(info["yaw"]))),
-		Vector3(float(p[0]), 0.0, float(p[2])) * model_scale)
+		Vector3(float(p[0]) * model_scale, float(p[1]), float(p[2]) * model_scale))
 
 
 static func is_identity(info: Dictionary) -> bool:
