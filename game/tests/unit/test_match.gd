@@ -53,3 +53,17 @@ func test_pin_near_ropes_is_broken() -> void:
 			break
 	assert_null(m.winner, "no win from a pin under the ropes")
 	assert_eq(b.state, Wrestler.State.KICKOUT)
+
+
+func test_referee_keeps_a_few_paces_from_the_action_anywhere() -> void:
+	# he used to stand by the back rope and stay there when the wrestlers came to him
+	var a := m.wrestlers[0]
+	var b := m.wrestlers[1]
+	var h := Ring.canvas_height()
+	for spot in [Vector3(0, h, -2.0), Vector3(2.0, h, -2.0), Vector3(-2.0, h, 0.5), Vector3(0, h, 2.0), Vector3(0, h, 0)]:
+		a.global_position = spot + Vector3(-0.5, 0, 0)
+		b.global_position = spot + Vector3(0.5, 0, 0)
+		await wait_physics_frames(300)
+		for w in [a, b]:
+			var d := Vector2(m.referee.global_position.x - w.global_position.x, m.referee.global_position.z - w.global_position.z).length()
+			assert_gt(d, 1.8, "action at %s: ref %.1f m from %s" % [spot, d, w.display_name])

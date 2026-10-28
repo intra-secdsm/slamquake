@@ -220,3 +220,8 @@ M3 is the key gate: the core grapple and animation approach must feel good there
     - chair swings at nobody
     - sinking into the canvas
     - throws landing inside the barricade
+  - **RC1 playtest fixes (v1.0-rc2):**
+    - Loading: a boot scene (`ui/boot.tscn`) shows the box art straight after the engine splash and loads the menu in the background. The title (`LoadingCover`) stays over the menu until frames run smoothly: at least 1.5 s, at most 8 s.
+    - Music: front-end music starts at a fixed menu level (`AudioDirector.MENU_DB`, −9 dB), from the loading screen on.
+    - Menus: clicking a "◀ value ▶" row steps toward the arrow you clicked (`ArrowClick`).
+    - Referee: picks a spot a few paces from everyone, wherever the action is, rather than always behind it.
