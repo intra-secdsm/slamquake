@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Regenerates game/assets/generated/* with Blender, then lets Godot import them.
-#   tools/build_assets.sh [wrestler|ring|props ...] [--quick]
+#   tools/build_assets.sh [wrestler|ring|props|arena ...] [--quick]
 # Each target runs in a fresh Blender process with a fixed hash seed so outputs are
 # byte-identical between runs (keeps Git LFS from storing churn).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BLENDER="${BLENDER:-blender}"
 GODOT="${GODOT:-godot}"
-ALL_TARGETS=(wrestler ring props)
+ALL_TARGETS=(wrestler ring props arena)
 
 targets=(); flags=()
 for a in "$@"; do [[ $a == --* ]] && flags+=("$a") || targets+=("$a"); done

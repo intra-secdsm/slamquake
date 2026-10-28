@@ -4,9 +4,12 @@ class_name Roster
 
 static func all() -> Array[Dictionary]:
 	return [
-		{"name": "Thunder Mack", "look": _thunder_mack(), "finisher": "thunder_bomb"},
-		{"name": "Zip Volta", "look": _zip_volta(), "finisher": "volt_shock"},
-		{"name": "Bruno Kessler", "look": _bruno(), "finisher": "iron_drop"},
+		{"name": "Thunder Mack", "look": _thunder_mack(), "finisher": "thunder_bomb", "theme": "theme_thunder",
+			"color": Color("ff2bd6"), "tagline": "THE STORM FROM SOUTH STREET"},
+		{"name": "Zip Volta", "look": _zip_volta(), "finisher": "volt_shock", "theme": "theme_zip",
+			"color": Color("00e5ff"), "tagline": "100,000 VOLTS OF HIGH-FLYING"},
+		{"name": "Bruno Kessler", "look": _bruno(), "finisher": "iron_drop", "theme": "theme_bruno",
+			"color": Color("ffd400"), "tagline": "THE IRON WALL"},
 	]
 
 

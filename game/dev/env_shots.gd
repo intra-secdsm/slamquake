@@ -25,11 +25,15 @@ var m: Match
 
 func _ready() -> void:
 	GameState.rules = "nodq"
+	Settings.entrances = DevTools.get_arg("setup", "") == "entrance"
 	GameState.match_entrants = [
 		{"roster": 0, "control": "cpu", "slot": 0, "difficulty": 0},
 		{"roster": 2, "control": "cpu", "slot": 1, "difficulty": 0},
 	]
-	var tag := DevTools.get_arg("setup", "chair").begins_with("tag")
+	if Settings.entrances:
+		for e in GameState.match_entrants:
+			e["difficulty"] = 2
+	var tag := DevTools.get_arg("setup", "chair").begins_with("tag") or DevTools.has_arg("tag")
 	if tag:
 		GameState.match_entrants.append({"roster": 1, "control": "cpu", "slot": 2, "difficulty": 0})
 		GameState.match_entrants.append({"roster": 0, "control": "cpu", "slot": 3, "difficulty": 0})
@@ -94,6 +98,21 @@ func _ready() -> void:
 			await get_tree().create_timer(0.2).timeout
 			ca.hold_move = Vector3.RIGHT
 			ca.hold_run = true
+		"replay":
+			Settings.replays = true
+			a.global_position = Vector3(-0.4, y, 0.3)
+			b.global_position = Vector3(0.4, y, 0.3)
+			a.rotation.y = PI / 2
+			b.rotation.y = -PI / 2
+			b.health = 1.0
+			b.infinite_health = false
+			a.gain_momentum(Wrestler.MOMENTUM_MAX)
+			await get_tree().physics_frame
+			ca.press = "grapple"
+			await get_tree().create_timer(0.3).timeout
+			ca.press = "taunt"
+			await get_tree().create_timer(2.6).timeout
+			ca.press = "block"
 		"finisher", "reversal":
 			a.global_position = Vector3(-0.4, y, 0.3)
 			b.global_position = Vector3(0.4, y, 0.3)
@@ -133,6 +152,8 @@ func _ready() -> void:
 			a2.rotation.y = PI
 			await get_tree().physics_frame
 			(a2.controller as Hold).press = "grapple"
+		"entrance":
+			pass
 		"outside":
 			a.global_position = Vector3(-1.0, y, lim - 0.2)
 			a.rotation.y = 0

@@ -1,5 +1,6 @@
 extends Node
-## Title screen + quick match setup over a live 3D ring backdrop.
+## Front end over the live arena: a title screen ("PRESS START"), the match setup panel
+## with the chosen wrestlers standing in the ring beside it, and an options screen.
 ## Fully usable with keyboard or gamepad (up/down to move, left/right to change).
 
 const MODES := ["1P vs CPU", "2P Versus", "Practice (vs Dummy)", "CPU vs CPU", "Tag Team (2v2)"]
@@ -15,25 +16,42 @@ var _rules := 0
 var _picks := [0, 1, 2, 0]
 var _humans := [true, false, false, false]
 var _rows: Array[Button] = []
+var _stage: MenuStage
+var _title_screen: Control
+var _setup: Control
+var _options: Control
+var _opt_rows: Array[Button] = []
+var _start_button: Button
 
 
 func _ready() -> void:
-	var backdrop: Node = load("res://match/showcase.tscn").instantiate()
-	add_child(backdrop)
+	_stage = MenuStage.new()
+	add_child(_stage)
+	add_child(CrtOverlay.new())
+	AudioDirector.play_music("theme_menu", 1.0)
+	AudioDirector.crowd_ambience(true)
+	AudioDirector.set_crowd(0.35)
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	_title_screen = _build_title()
+	layer.add_child(_title_screen)
+	_setup = Control.new()
+	_setup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_setup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_setup.visible = false
+	layer.add_child(_setup)
 	var shade := ColorRect.new()
-	shade.color = Color(0.02, 0.0, 0.05, 0.55)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(shade)
+	shade.color = Color(0.02, 0.0, 0.06, 0.78)
+	shade.position = Vector2(40, 40)
+	shade.size = Vector2(760, 1000)
+	_setup.add_child(shade)
 
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.custom_minimum_size = Vector2(620, 0)
-	box.position = Vector2(-310, -360)
+	box.position = Vector2(80, 60)
+	box.custom_minimum_size = Vector2(680, 0)
 	box.add_theme_constant_override("separation", 12)
-	layer.add_child(box)
+	_setup.add_child(box)
 
 	var title := Label.new()
 	title.text = "WRESTLE"
@@ -65,6 +83,12 @@ func _ready() -> void:
 	start.add_theme_color_override("font_color", Color("ffd400"))
 	start.pressed.connect(_start)
 	box.add_child(start)
+	_start_button = start
+	var opts := Button.new()
+	opts.text = "Options"
+	opts.add_theme_font_size_override("font_size", 24)
+	opts.pressed.connect(_show_options)
+	box.add_child(opts)
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.add_theme_font_size_override("font_size", 24)
@@ -77,12 +101,182 @@ func _ready() -> void:
 	hint.add_theme_font_size_override("font_size", 18)
 	box.add_child(hint)
 
+	_options = _build_options()
+	layer.add_child(_options)
 	_mode = clampi(int(DevTools.get_arg("menu_mode", "0")), 0, MODES.size() - 1)   # dev: screenshot a mode
 	_refresh()
-	start.grab_focus()
+	if DevTools.has_arg("menu_mode"):
+		_show_setup()
+	elif DevTools.get_arg("menu", "") == "options":
+		_show_options()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _title_screen.visible and (event is InputEventKey or event is InputEventJoypadButton) and event.is_pressed():
+		AudioDirector.play("bell", Vector3.ZERO, -10.0)
+		_show_setup()
+		get_viewport().set_input_as_handled()
+	elif _options.visible and event.is_action_pressed("ui_cancel"):
+		_close_options()
+		get_viewport().set_input_as_handled()
+
+
+func _show_setup() -> void:
+	_title_screen.visible = false
+	_options.visible = false
+	_setup.visible = true
+	_start_button.grab_focus()
+
+
+func _build_title() -> Control:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var logo := Label.new()
+	logo.text = "WRESTLE"
+	logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	logo.position = Vector2(-700, 200)
+	logo.size = Vector2(1400, 260)
+	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	logo.add_theme_font_size_override("font_size", 230)
+	logo.add_theme_color_override("font_color", Color("ff2bd6"))
+	logo.add_theme_color_override("font_outline_color", Color("00e5ff"))
+	logo.add_theme_constant_override("outline_size", 24)
+	logo.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	logo.add_theme_constant_override("shadow_offset_y", 14)
+	root.add_child(logo)
+	var tag := Label.new()
+	tag.text = "★  NINETIES ARCADE GRAPPLING  ★"
+	tag.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	tag.position = Vector2(-700, 470)
+	tag.size = Vector2(1400, 60)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.add_theme_font_size_override("font_size", 40)
+	tag.add_theme_color_override("font_color", Color("ffd400"))
+	tag.add_theme_color_override("font_outline_color", Color.BLACK)
+	tag.add_theme_constant_override("outline_size", 8)
+	root.add_child(tag)
+	var press := Label.new()
+	press.text = "PRESS START"
+	press.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	press.position = Vector2(-500, -260)
+	press.size = Vector2(1000, 80)
+	press.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	press.add_theme_font_size_override("font_size", 64)
+	press.add_theme_color_override("font_color", Color.WHITE)
+	press.add_theme_color_override("font_outline_color", Color("ff2bd6"))
+	press.add_theme_constant_override("outline_size", 12)
+	root.add_child(press)
+	var tw := press.create_tween().set_loops()
+	tw.tween_property(press, "modulate:a", 0.15, 0.55)
+	tw.tween_property(press, "modulate:a", 1.0, 0.55)
+	var foot := Label.new()
+	foot.text = "working title · playtest build · all wrestlers are fictional"
+	foot.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	foot.position = Vector2(-500, -90)
+	foot.size = Vector2(1000, 40)
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_theme_font_size_override("font_size", 20)
+	foot.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	root.add_child(foot)
+	return root
+
+
+# ---------------------------------------------------------------- options
+
+const OPTIONS := ["music_volume", "sfx_volume", "crowd_volume", "fullscreen", "crt", "entrances", "replays"]
+const OPTION_NAMES := {"music_volume": "Music", "sfx_volume": "Sound effects", "crowd_volume": "Crowd",
+	"fullscreen": "Fullscreen", "crt": "CRT filter (menus)", "entrances": "Entrances", "replays": "Instant replays"}
+
+
+func _build_options() -> Control:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.visible = false
+	var shade := ColorRect.new()
+	shade.color = Color(0.02, 0.0, 0.06, 0.82)
+	shade.position = Vector2(40, 40)
+	shade.size = Vector2(760, 1000)
+	root.add_child(shade)
+	var box := VBoxContainer.new()
+	box.position = Vector2(80, 80)
+	box.custom_minimum_size = Vector2(680, 0)
+	box.add_theme_constant_override("separation", 14)
+	root.add_child(box)
+	var title := Label.new()
+	title.text = "OPTIONS"
+	title.add_theme_font_size_override("font_size", 80)
+	title.add_theme_color_override("font_color", Color("ff2bd6"))
+	title.add_theme_color_override("font_outline_color", Color("00e5ff"))
+	title.add_theme_constant_override("outline_size", 10)
+	box.add_child(title)
+	for i in OPTIONS.size():
+		var b := Button.new()
+		b.add_theme_font_size_override("font_size", 30)
+		b.gui_input.connect(_on_option_input.bind(i))
+		b.pressed.connect(_change_option.bind(i, 1))
+		box.add_child(b)
+		_opt_rows.append(b)
+	var back := Button.new()
+	back.text = "Back"
+	back.add_theme_font_size_override("font_size", 30)
+	back.pressed.connect(_close_options)
+	box.add_child(back)
+	var hint := Label.new()
+	hint.text = "←→ change   Esc / B: back (settings are saved)"
+	hint.add_theme_font_size_override("font_size", 18)
+	box.add_child(hint)
+	_refresh_options()
+	return root
+
+
+func _refresh_options() -> void:
+	for i in OPTIONS.size():
+		var key: String = OPTIONS[i]
+		var v: Variant = Settings.get(key)
+		var shown := "%d" % roundi(float(v) * 10.0) if v is float else ("On" if v else "Off")
+		_opt_rows[i].text = "◀  %s: %s  ▶" % [OPTION_NAMES[key], shown]
+
+
+func _on_option_input(event: InputEvent, i: int) -> void:
+	if event.is_action_pressed("ui_left"):
+		_change_option(i, -1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_right"):
+		_change_option(i, 1)
+		get_viewport().set_input_as_handled()
+
+
+func _change_option(i: int, step: int) -> void:
+	var key: String = OPTIONS[i]
+	var v: Variant = Settings.get(key)
+	if v is float:
+		Settings.set(key, clampf(snappedf(float(v) + step * 0.1, 0.1), 0.0, 1.0))
+	else:
+		Settings.set(key, not v)
+	Settings.apply()
+	for c in get_children():
+		if c is CrtOverlay:
+			c.visible = Settings.crt
+	AudioDirector.play("hit_light", Vector3.ZERO, -12.0)
+	_refresh_options()
+
+
+func _show_options() -> void:
+	_title_screen.visible = false
+	_setup.visible = false
+	_options.visible = true
+	_opt_rows[0].grab_focus()
+
+
+func _close_options() -> void:
+	Settings.save()
+	_show_setup()
 
 
 func _refresh() -> void:
+	_update_lineup()
 	for r in _rows:
 		r.visible = true
 		r.disabled = false
@@ -123,6 +317,20 @@ func _refresh_tag() -> void:
 	_rows[7].text = "←→ wrestler · Enter / A on a slot: Human ⇄ CPU · players get pads/keys in order"
 	_rows[7].add_theme_font_size_override("font_size", 18)
 	_rows[7].focus_mode = Control.FOCUS_NONE
+
+
+## Show the picked wrestlers standing in the ring.
+func _update_lineup() -> void:
+	if _stage == null:
+		return
+	var picks: Array = _picks if _mode == TAG else [_p1, _p2]
+	var looks := []
+	var used := {}
+	for p in picks:
+		var look: WrestlerLook = Roster.get_entry(p)["look"]
+		looks.append(Roster.alt_look(look) if used.has(p) else look)
+		used[p] = true
+	_stage.show_lineup(looks)
 
 
 func _on_row_input(event: InputEvent, row: int) -> void:
@@ -177,7 +385,7 @@ func _start() -> void:
 		for i in [0, 2, 1, 3]:
 			GameState.match_entrants.append({"roster": _picks[i], "control": "human" if _humans[i] else "cpu",
 				"slot": slots.get(i, 0), "difficulty": _difficulty, "team": 0 if i < 2 else 1})
-		get_tree().change_scene_to_file("res://match/match.tscn")
+		_go()
 		return
 	var human := "human"
 	var cpu := "cpu"
@@ -189,4 +397,10 @@ func _start() -> void:
 		3: p1["control"] = cpu
 	GameState.match_entrants = [p1, p2]
 	GameState.rules = GameState.RULES.keys()[_rules]
+	_go()
+
+
+func _go() -> void:
+	AudioDirector.play_music("", 0.6)
+	AudioDirector.crowd_ambience(false)
 	get_tree().change_scene_to_file("res://match/match.tscn")

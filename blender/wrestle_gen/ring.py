@@ -41,6 +41,9 @@ def _mat(name):
     bsdf.inputs["Base Color"].default_value = (*spec["color"], 1)
     bsdf.inputs["Roughness"].default_value = spec["rough"]
     bsdf.inputs["Metallic"].default_value = spec.get("metal", 0.0)
+    if "emit" in spec:
+        bsdf.inputs["Emission Color"].default_value = (*spec["emit"], 1)
+        bsdf.inputs["Emission Strength"].default_value = spec.get("emit_strength", 1.0)
     return mat
 
 

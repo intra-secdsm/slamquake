@@ -24,7 +24,7 @@ enum State {
 	GRAB_WHIFF, TIEUP, HELD, PAIRED, WHIPPED, CORNER_HIT, CORNERED, CORNER_EXIT,
 	STOMP, DOWN_HIT, PINNING, PINNED, KICKOUT, COVER_RELEASE, STUN, CELEBRATE,
 	EXIT_RING, ENTER_RING, FALL_OUT, CLIMB, PERCH, CLIMB_DOWN, DIVE, DIVE_LAND, ITEM_PICKUP, CHAIR_SWING, PARRY,
-	APRON, APRON_ENTER, APRON_EXIT,
+	APRON, APRON_ENTER, APRON_EXIT, ENTRANCE,
 }
 
 const WALK_SPEED := 2.5
@@ -58,11 +58,11 @@ const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State
 	State.FALL_OUT, State.DIVE_LAND]
 const BUSY := [State.TIEUP, State.HELD, State.PAIRED, State.PINNING, State.PINNED, State.CELEBRATE,
 	State.EXIT_RING, State.ENTER_RING, State.CLIMB, State.CLIMB_DOWN, State.DIVE,
-	State.APRON, State.APRON_ENTER, State.APRON_EXIT]
+	State.APRON, State.APRON_ENTER, State.APRON_EXIT, State.ENTRANCE]
 ## states whose motion is fully scripted (no gravity, collision response or ring clamping)
 const SCRIPTED := [State.PAIRED, State.HELD, State.TIEUP, State.PINNING, State.PINNED, State.EXIT_RING,
 	State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.PERCH, State.CLIMB_DOWN, State.DIVE,
-	State.APRON, State.APRON_ENTER, State.APRON_EXIT]
+	State.APRON, State.APRON_ENTER, State.APRON_EXIT, State.ENTRANCE]
 ## states in which a held chair stays in hand
 const ITEM_OK := [State.IDLE, State.CHAIR_SWING, State.ITEM_PICKUP, State.EXIT_RING, State.ENTER_RING]
 const EDGE_PUSH_TIME := 0.35
@@ -82,6 +82,7 @@ var apron_spot := Vector3.ZERO   ## where this team's partner waits (world space
 var illegal_time := 0.0
 var forced_return := false       ## the referee is sending this illegal partner back to the apron
 var _helper: Wrestler            # teammate joining in on a double-team move
+var _to_apron := false           # climbing up from the floor to wait on the apron
 var ring: Ring
 var model: WrestlerModel
 var state: State = State.IDLE
@@ -315,6 +316,7 @@ func _physics_process(delta: float) -> void:
 		State.PARRY: _st_parry(delta)
 		State.APRON: _st_apron(delta)
 		State.APRON_ENTER, State.APRON_EXIT: _st_root_anim(delta)
+		State.ENTRANCE: pass        # driven by the match's Entrance director
 		State.GRAB_WHIFF: _st_anim_then_idle("grab_whiff")
 		State.TIEUP: _st_tieup(delta)
 		State.HELD: _hold_still()
@@ -1551,7 +1553,12 @@ func _st_root_anim(_delta: float) -> void:
 		State.FALL_OUT: _go_down(0.5)
 		State.CLIMB: _enter(State.PERCH, 0.0)
 		State.APRON_EXIT: _enter(State.APRON, 0.0)
-		_: _enter(State.IDLE, 0.0)
+		_:
+			if _to_apron:
+				_to_apron = false
+				_enter(State.APRON, 0.0)
+			else:
+				_enter(State.IDLE, 0.0)
 
 
 ## A big hit near the ropes sends the victim over the top to the floor.
@@ -1876,3 +1883,38 @@ func _broken_up(by: Wrestler) -> void:
 	_push = by.flat_dir_to(self) * 2.5
 	_enter(State.KNOCKDOWN)
 	knocked_down.emit(self)
+
+
+# ---------------------------------------------------------------- entrances
+
+## From the floor in front of our apron spot, climb up to wait on the apron.
+func climb_to_apron() -> void:
+	_to_apron = true
+	_face(Vector3(0, 0, -signf(apron_spot.z)), 0.0, true)
+	_start_root_anim(State.ENTER_RING, "enter_ring")
+
+
+## From the floor beside the ring, roll in under the bottom rope.
+func roll_in() -> void:
+	_start_root_anim(State.ENTER_RING, "enter_ring")
+
+
+## Scripted walking during entrances (the director moves us; we just animate).
+func entrance_walk(to: Vector3, speed: float, delta: float) -> bool:
+	var d := to - global_position
+	var flat := Vector3(d.x, 0, d.z)
+	if flat.length() < 0.05:
+		global_position = to
+		return true
+	var step := minf(flat.length(), speed * delta)
+	global_position += flat.normalized() * step
+	global_position.y = to.y if flat.length() < 0.3 else lerpf(global_position.y, to.y, step / flat.length())
+	_face(flat, delta * 8.0)
+	_play("walk", 0.2)
+	model.anim_player.speed_scale = speed / WALK_SPEED
+	return false
+
+
+func entrance_pose(anim_name: String) -> void:
+	model.anim_player.speed_scale = 1.0
+	_play(anim_name, 0.2)

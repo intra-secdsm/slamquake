@@ -4,15 +4,40 @@
   "canvas_half": 3.45,
   "canvas_thickness": 0.14,
   "mat_height": 1.15,
-  "rope_heights": [0.48, 0.88, 1.28],
+  "rope_heights": [
+    0.48,
+    0.88,
+    1.28
+  ],
   "rope_radius": 0.028,
   "post_radius": 0.07,
   "post_top": 1.45,
-  "pad_size": [0.20, 0.30, 0.13],
+  "pad_size": [
+    0.2,
+    0.3,
+    0.13
+  ],
   "pad_inset": 0.13,
   "floor_mat_width": 2.2,
   "barricade_half": 6.2,
   "barricade_height": 1.05,
   "aisle_width": 2.6,
-  "steps_width": 1.0
+  "steps_width": 1.0,
+  "arena": {
+    "_comment": "Arena around ringside (Godot axes: the stage and entrance aisle are on -z). Seating tiers start at stands_inner from the ring centre.",
+    "stands_inner": 8.6,
+    "rows": 14,
+    "row_depth": 0.85,
+    "row_rise": 0.42,
+    "stage_front": 11.5,
+    "stage_back": 15.0,
+    "stage_half_width": 6.0,
+    "stage_height": 1.1,
+    "ramp_end": 8.0,
+    "screen_half_width": 4.2,
+    "screen_bottom": 2.9,
+    "screen_top": 7.6,
+    "truss_height": 9.5,
+    "truss_half": 4.2
+  }
 }

@@ -7,6 +7,7 @@ var wrestlers: Array[WrestlerModel] = []
 
 func _ready() -> void:
 	add_child(ArenaLighting.new())
+	add_child(Arena.new())
 	var ring := Ring.new()
 	add_child(ring)
 	var y := Ring.canvas_height()
@@ -32,6 +33,12 @@ func _ready() -> void:
 	add_child(cam)
 	cam.fov = 40
 	match DevTools.get_arg("cam", "wide"):
+		"arena":
+			cam.fov = 60
+			cam.look_at_from_position(Vector3(0.0, 9.0, 16.0), Vector3(0, 2.5, -4.0))
+		"stage":
+			cam.fov = 50
+			cam.look_at_from_position(Vector3(3.0, 3.0, -2.0), Vector3(0, 3.5, -14.0))
 		"face":
 			cam.fov = 22
 			cam.look_at_from_position(Vector3(0.0, y + 1.78, 1.6), Vector3(0, y + 1.74, 0.4))

@@ -2,7 +2,7 @@
 
     blender -b --factory-startup -P blender/build.py -- [targets...] [--quick]
 
-Targets: wrestler, ring, props (default: all). --quick uses coarse meshes for fast iteration.
+Targets: wrestler, ring, props, arena (default: all). --quick uses coarse meshes for fast iteration.
 Prefer tools/build_assets.sh, which wraps this.
 """
 import sys
@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from wrestle_gen import anims, body, poses, props, rig, ring  # noqa: E402
+from wrestle_gen import anims, arena, body, poses, props, rig, ring  # noqa: E402
 from wrestle_gen.util import GENERATED, export_glb, reset_scene, write_json  # noqa: E402
 
 
@@ -44,7 +44,12 @@ def build_props(quick):
     export_glb(GENERATED / "props.glb", props.build_props())
 
 
-TARGETS = {"wrestler": build_wrestler, "ring": build_ring, "props": build_props}
+def build_arena(quick):
+    reset_scene()
+    export_glb(GENERATED / "arena.glb", arena.build_arena())
+
+
+TARGETS = {"wrestler": build_wrestler, "ring": build_ring, "props": build_props, "arena": build_arena}
 
 
 def main(argv):

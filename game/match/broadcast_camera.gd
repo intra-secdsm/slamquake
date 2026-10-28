@@ -18,6 +18,7 @@ var _cine: Array = []
 var _cine_left := 0.0
 var _cine_angle := 0.0
 var _cine_blend := 0.0
+var _follow: Node3D
 
 
 func _ready() -> void:
@@ -38,6 +39,27 @@ func cinematic(subjects: Array, facing: Vector3, seconds: float) -> void:
 	_cine_blend = 0.0
 
 
+## Entrance camera: walk backwards in front of `target` (null returns to the hard cam).
+func follow(target: Node3D) -> void:
+	var was := _follow
+	_follow = target
+	if target and was == null:
+		global_transform = _follow_xform(target)
+	elif target == null and was != null:
+		_snap()
+
+
+func _follow_xform(target: Node3D) -> Transform3D:
+	var chest := target.global_position + Vector3.UP * 1.35
+	var to_ring := Vector3(-chest.x, 0, -chest.z)
+	to_ring = to_ring.normalized() if to_ring.length() > 0.5 else Vector3.BACK
+	var side := to_ring.cross(Vector3.UP)
+	var pos := chest + to_ring * 3.4 + side * 1.1 + Vector3.UP * 0.35
+	var x := Transform3D.IDENTITY.looking_at(chest - pos, Vector3.UP)
+	x.origin = pos
+	return x
+
+
 func in_cinematic() -> bool:
 	return _cine_left > 0.0
 
@@ -55,6 +77,13 @@ func _snap() -> void:
 
 
 func _process(delta: float) -> void:
+	if _follow:
+		if not is_instance_valid(_follow):
+			_follow = null
+		else:
+			global_transform = global_transform.interpolate_with(_follow_xform(_follow), clampf(delta * 3.0, 0.0, 1.0))
+			fov = 50.0
+			return
 	_update(clampf(delta * follow_speed, 0.0, 1.0))
 	if _cine_left > 0.0:
 		_cine_left -= delta

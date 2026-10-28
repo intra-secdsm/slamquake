@@ -179,6 +179,24 @@ def boom(length, seed):
     return out
 
 
+def pyro(length, seed):
+    """Entrance pyro: a deep whoomp followed by crackling sparks."""
+    rnd0 = random.Random(seed)
+    pops = sorted(rnd0.uniform(0.15, length * 0.9) for _ in range(70))
+    lp, lp2 = Lowpass(300), Lowpass(4000)
+    phase = [0.0]
+
+    def fn(t, rnd):
+        phase[0] += 2 * math.pi * (40 + 60 * math.exp(-t / 0.08)) / RATE
+        boom = math.sin(phase[0]) * env(t, 0.004, 0.35) * 1.4 + lp(rnd.uniform(-1, 1)) * env(t, 0.01, 0.4) * 4
+        crackle = 0.0
+        for p in pops:
+            if 0 <= t - p < 0.01:
+                crackle += rnd.uniform(-1, 1) * math.exp(-(t - p) / 0.002)
+        return boom + lp2(crackle) * 1.2
+    return render(length, fn, seed)
+
+
 def triple(samples, gap):
     out = [0.0] * (len(samples) + 2 * int(gap * RATE))
     for k in range(3):
@@ -221,6 +239,7 @@ SOUNDS = {
     "finisher_impact": lambda: boom(1.1, 14),
     "crowd_pop": lambda: crowd(3.2, 15, 0.25, 0.9, (480, 820, 1350), claps=40),
     "crowd_ooh": lambda: crowd(1.6, 16, 0.2, 0.3, (420, 760)),
+    "pyro": lambda: pyro(2.2, 17),
 }
 
 if __name__ == "__main__":
