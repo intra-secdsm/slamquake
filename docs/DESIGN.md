@@ -23,21 +23,24 @@
 
 ## Repo layout
 ```
-wrestle/
+slamquake/
   game/                     Godot project (project.godot)
-    core/                   autoloads: GameState, InputRouter, AudioDirector, SaveSystem
-    wrestler/               Wrestler.tscn, state machine, MovePlayer, damage, AI
-    match/                  MatchDirector, rules (pin/submission/countout/DQ), Referee, Camera
-    ring/                   ring, ropes, turnbuckles, apron, ringside, props (chair, table)
-    data/                   moves/*.tres, wrestlers/*.tres, career/*.tres
-    ui/                     menus, HUD, CAW, career screens
-    fx/                     shaders (toon+rim, CRT/VHS post), particles
+    core/                   autoloads: GameState, InputRouter, AudioDirector, Settings, DevTools
+    wrestler/               Wrestler (state machine, moves, damage), model/look, player + CPU controllers
+    match/                  Match (rules: pin/count-out/DQ, tag), Referee, broadcast camera, entrances, replay
+    ring/ props/            ring, ropes, steel steps; chair, folding table
+    arena/                  arena, crowd, titantron
+    data/                   moves (grapples.gd, strikes.gd, movesets.gd), roster, stats, career, stories, unlocks
+    ui/                     boot/loading, menus, HUD, CAW, career, credits
+    fx/                     shaders (wrestler toon, CRT, VHS), hit effects, pyro
     assets/generated/       .glb from Blender (LFS, committed)
-    assets/audio/           CC0 audio (LFS) + licenses.json
-    tests/                  GUT unit tests + headless sim tests
-  blender/                  bpy generators: rig, bodies, attire, ring, arena, props, poses
-  tools/                    setup.sh, build_assets.sh, export.sh, fetch_audio.py, screenshot.gd
-  docs/                     DESIGN.md, MOVES.md, ART_PIPELINE.md, CREDITS.md
+    assets/audio/           synthesized CC0 audio (LFS) + licenses.json
+    dev/                    soak runner, screenshot/lineup scenes, license printer
+    tests/                  GUT unit tests (+ pre-run hook that redirects saves)
+  blender/                  bpy generators: rig, SDF bodies, attire, ring, arena, props, poses/animations
+  tools/                    setup.sh, test.sh, build_assets.sh, export.sh, screenshot.sh, synth_*.py
+  docs/                     DESIGN.md, ART_PIPELINE.md, CREDITS.md, THIRD_PARTY_NOTICES.md, art/
+  .github/workflows/        CI: tests + a soak on every push to main and every pull request
   .gitattributes            LFS: *.glb *.blend *.png *.jpg *.exr *.wav *.ogg *.mp3 *.ttf
 ```
 The generated `.glb` files are committed through LFS. That way the game opens in Godot even without Blender, and regenerating them is deterministic.
@@ -107,7 +110,7 @@ The generated `.glb` files are committed through LFS. That way the game opens in
   - layered impact SFX by type (strike, slam, table break, chair hit, ropes)
   - a dynamic crowd bed (murmur → cheer → "pop"), bell, ref counts
   - CC0 or synthesized music stings, and entrance themes
-- All audio licenses are tracked in `assets/audio/licenses.json` and `docs/CREDITS.md`. `tools/fetch_audio.py` keeps a manifest with URLs and checksums.
+- All audio is synthesized by `tools/synth_sfx.py` and `tools/synth_music.py` (CC0). Every file is listed in `assets/audio/licenses.json` (a test checks this) and credited in `docs/CREDITS.md`.
 - Optional: offline TTS for announcer and ref callouts, after checking the voice license.
 
 ## Modes

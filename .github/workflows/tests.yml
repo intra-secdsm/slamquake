@@ -1,0 +1,59 @@
+# Runs the GUT test suite and a short CPU-vs-CPU soak headlessly with the pinned Godot.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # LFS files (models, audio, fonts) are cached so each run doesn't re-download them.
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+      - uses: actions/cache@v6
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+      - name: Fetch LFS files
+        run: git lfs pull
+
+      - name: Read pinned versions
+        run: grep -E '^[A-Z_]+=' tools/versions.env >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        with:
+          path: ~/godot-dl
+          key: godot-${{ env.GODOT_VERSION }}
+      - name: Install Godot
+        run: |
+          tag="${GODOT_VERSION}-stable"
+          zip="Godot_v${tag}_linux.x86_64.zip"
+          base="https://github.com/godotengine/godot/releases/download/$tag"
+          mkdir -p ~/godot-dl && cd ~/godot-dl
+          [ -s "$zip" ] || curl -fsSL --retry 3 -o "$zip" "$base/$zip"
+          curl -fsSL --retry 3 -o SHA512-SUMS.txt "$base/SHA512-SUMS.txt"
+          grep " \*\?$zip\$" SHA512-SUMS.txt | sed 's/ \*/  /' | sha512sum -c -
+          unzip -q -o "$zip" -d ~/godot && chmod +x ~/godot/Godot_v${tag}_linux.x86_64
+          echo "GODOT=$HOME/godot/Godot_v${tag}_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: tools/test.sh
+
+      - name: Soak (CPU vs CPU)
+        run: >
+          "$GODOT" --headless --fixed-fps 60 --path game res://dev/soak.tscn --
+          --seconds=600 --mode=mixed --seed=${{ github.run_number }}
