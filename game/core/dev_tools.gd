@@ -4,6 +4,7 @@ extends Node
 ##   --screenshot=/abs/out.png  save a frame of the main viewport, then quit
 ##   --frames=N                 frames to wait before the screenshot (default 30)
 ##   --set=key:value            arbitrary values, readable via DevTools.get_arg()
+##   --fps=SECONDS              print the average frame rate after this long, then quit
 
 var _args: Dictionary = {}
 var _frames_left: int = -1
@@ -19,6 +20,20 @@ func _ready() -> void:
 		_shot_path = _args["screenshot"]
 		_frames_left = int(_args.get("frames", "30"))
 		process_mode = Node.PROCESS_MODE_ALWAYS
+
+	if _args.has("fps"):
+		_measure_fps(float(_args["fps"]))
+
+
+func _measure_fps(seconds: float) -> void:
+	await get_tree().create_timer(2.0).timeout      # let loading settle
+	var frames := Engine.get_process_frames()
+	var start := Time.get_ticks_msec()
+	await get_tree().create_timer(seconds).timeout
+	var fps := (Engine.get_process_frames() - frames) * 1000.0 / (Time.get_ticks_msec() - start)
+	print("FPS %.1f" % fps)
+	get_tree().quit()
+
 
 func get_arg(key: String, default: String = "") -> String:
 	return _args.get(key, default)

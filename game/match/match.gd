@@ -12,11 +12,14 @@ const COUNT_OUT := 20
 var count_period := 1.0         ## seconds per count-out number
 
 var ring: Ring
+var arena: Arena
 var camera: BroadcastCamera
 var hud: MatchHud
 var referee: Referee
 var wrestlers: Array[Wrestler] = []
 var tag_mode := false
+var intro := false                 ## entrances are playing; the match hasn't started
+var replay: Replay
 var winner: Wrestler               ## set when the match ends (a wrestler even on a draw)
 var finish_reason := ""
 var _finished := false
@@ -24,6 +27,9 @@ var tables: Array[FoldingTable] = []
 var chairs: Array[Chair] = []
 var _pin: Dictionary = {}          # {attacker, defender}
 var _saved := false
+var _finisher_by: Array = []
+var _last_pin_attacker: Wrestler
+var _last_pin_defender: Wrestler
 var _count := 0
 var _count_t := 0.0
 var _pause_menu: Control
@@ -32,6 +38,8 @@ var _end_menu: Control
 
 func _ready() -> void:
 	add_child(ArenaLighting.new())
+	arena = Arena.new()
+	add_child(arena)
 	ring = Ring.new()
 	add_child(ring)
 	camera = BroadcastCamera.new()
@@ -51,6 +59,7 @@ func _ready() -> void:
 			w.look = Roster.alt_look(entry["look"])   # same wrestler twice: alternate colours
 		used[e["roster"]] = true
 		w.team = int(e.get("team", i % 2))
+		w.set_meta("roster", e["roster"])
 		w.display_name = entry["name"]
 		w.finisher = entry.get("finisher", "thunder_bomb")
 		w.ring = ring
@@ -96,6 +105,9 @@ func _ready() -> void:
 	referee.global_position = Vector3(0, Ring.canvas_height(), -2.2)
 	referee.wrestlers = wrestlers
 	referee.counted.connect(_on_count)
+	replay = Replay.new()
+	add_child(replay)
+	replay.setup(self)
 
 	hud = MatchHud.new()
 	add_child(hud)
@@ -108,19 +120,50 @@ func _ready() -> void:
 		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN\n"
 		+ "Push into the ropes to roll out · grapple near a corner to climb · grapple near a chair to pick it up")
 	hud.setup(wrestlers, "\n".join(help))
-	AudioDirector.play("bell", camera.global_position + Vector3.FORWARD * 3.0, -4.0)
-	hud.banner("FIGHT!", 1.2)
+	AudioDirector.crowd_ambience(true)
 	# the director keeps listening for unpause; everything else freezes
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	for c in get_children():
 		c.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_build_pause_menu()
+	var dummy := GameState.match_entrants.any(func(e: Dictionary) -> bool:
+		return e["control"] == "cpu" and int(e["difficulty"]) == 0)
+	if Settings.entrances and not dummy:
+		intro = true
+		var ent := Entrance.new()
+		ent.match_node = self
+		add_child(ent)
+		ent.finished.connect(_begin_fight)
+		ent.run()
+	else:
+		AudioDirector.play_music("", 0.5)
+		_begin_fight()
+
+
+func _begin_fight() -> void:
+	intro = false
+	AudioDirector.play_music("", 1.5)
+	arena.titantron.show_text(team_name(wrestlers[0]), "VS  " + team_name(wrestlers[1]))
+	AudioDirector.play("bell", camera.global_position + Vector3.FORWARD * 3.0, -4.0)
+	hud.banner("FIGHT!", 1.2)
+
+
+## Crowd heat: big moments push it up, it settles back to a murmur.
+func excite(amount: float, flash: float = 0.0) -> void:
+	arena.heat += amount
+	if flash > 0.0:
+		arena.crowd.pop(flash)
+
+
+func _process(delta: float) -> void:
+	arena.heat = move_toward(arena.heat, 0.3, delta * 0.04)
+	AudioDirector.set_crowd(arena.heat)
 
 
 func _physics_process(delta: float) -> void:
-	if tag_mode:
+	if tag_mode and not intro:
 		_update_tag_view()
-	if get_tree().paused or winner:
+	if get_tree().paused or winner or intro:
 		return
 	_count_out(delta)
 	if _pin.is_empty():
@@ -146,12 +189,16 @@ func _on_pin_started(attacker: Wrestler, defender: Wrestler) -> void:
 	if winner:
 		return
 	_pin = {"attacker": attacker, "defender": defender}
+	replay.mark("pin")
 	referee.start_count(defender)
+	excite(0.08)
 
 
 func _on_count(n: int) -> void:
 	if _pin.is_empty():
 		return
+	_last_pin_attacker = _pin["attacker"]
+	_last_pin_defender = _pin["defender"]
 	hud.banner(str(n) if n < 3 else "THREE!", 0.8 if n < 3 else 2.0)
 	if n >= 3:
 		_finish(_pin["attacker"], _pin["defender"])
@@ -162,6 +209,7 @@ func _on_kicked_out(defender: Wrestler) -> void:
 		return
 	if referee.count == 2 and not _saved:
 		hud.banner("KICK OUT AT 2!", 1.2)
+		excite(0.3, 0.6)
 	_saved = false
 	_pin = {}
 	hud.show_kickout(null, 0.0)
@@ -221,10 +269,17 @@ func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 		else:
 			w.lose()
 	AudioDirector.play("bell_triple", camera.global_position + Vector3.FORWARD * 3.0, -2.0)
+	excite(1.0, 1.0)
 	camera.shake(0.6)
 	if reason != "":
 		hud.banner(reason + "!", 1.2)
 	await get_tree().create_timer(1.2).timeout
+	if reason == "" and Settings.replays:
+		await _play_replay()
+	if win:
+		AudioDirector.play_music("victory", 0.2, false)
+		var entry := Roster.get_entry(int(win.get_meta("roster", 0)))
+		arena.titantron.show_text(team_name(win), "WINNER", entry.get("color", Color("ffd400")))
 	hud.banner("WINNER: %s" % team_name(win) if win else "NO CONTEST", 3.5)
 	match_ended.emit(win)
 	await get_tree().create_timer(3.0).timeout
@@ -240,6 +295,7 @@ func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked:
 	if move.get("weapon", false) and GameState.rules == "normal" and not winner:
 		_finish(victim, attacker, "DISQUALIFIED")
 	var heavy := float(move.get("damage", 0)) >= 8.0
+	excite(float(move.get("damage", 0)) * 0.006)
 	var at := victim.body_center().lerp(attacker.global_position + Vector3.UP * 1.3, 0.25)
 	HitFx.spawn(self, at, heavy)
 	camera.shake(1.0 if heavy else 0.35)
@@ -293,6 +349,7 @@ func _on_tagged(_out: Wrestler, into: Wrestler, hot: bool) -> void:
 	AudioDirector.play("mat_slap", into.global_position + Vector3.UP * 1.3, 2.0)
 	if hot:
 		_crowd("crowd_pop", -4.0)
+		excite(0.35, 0.5)
 
 
 func _on_pin_saved(by: Wrestler, _pinner: Wrestler) -> void:
@@ -319,6 +376,7 @@ func _on_move_performed(w: Wrestler, id: String) -> void:
 		_finisher_cinematic(w, id)
 	elif float(mv.get("damage", 0.0)) >= 14.0:
 		_crowd("crowd_ooh", -8.0)
+		excite(0.12)
 
 
 func _on_reversed(by: Wrestler, _victim: Wrestler, kind: String) -> void:
@@ -338,6 +396,8 @@ func _on_special_ready(w: Wrestler) -> void:
 func _finisher_cinematic(w: Wrestler, id: String) -> void:
 	var mv := Grapples.get_move(id)
 	var impact := float(mv["events"].get("impact", 1.0))
+	replay.mark("finisher")
+	_finisher_by = [w, w.partner]
 	hud.banner(w.finisher_name() + "!", impact + 0.6)
 	camera.cinematic([w, w.partner], w.facing(), float(mv["length"]) + 0.3)
 	_crowd("crowd_ooh", -6.0)
@@ -353,6 +413,25 @@ func _finisher_cinematic(w: Wrestler, id: String) -> void:
 	hud.flash()
 	camera.shake(2.0)
 	_crowd("crowd_pop", -2.0)
+	excite(0.6, 1.0)
+
+
+## The finish again, on tape: the last finisher if it was recent, else the run-up to the pin.
+func _play_replay() -> void:
+	var hz := Engine.physics_ticks_per_second
+	var ago := replay.frames_since("finisher")
+	var subjects: Array = _finisher_by.filter(func(n: Variant) -> bool: return is_instance_valid(n))
+	var start := ago + int(0.3 * hz)
+	var length := int(3.2 * hz)
+	if ago < 0 or subjects.size() < 2:
+		ago = replay.frames_since("pin")
+		if ago < 0:
+			return
+		start = ago + int(3.5 * hz)
+		length = int(4.0 * hz)
+		subjects = [_last_pin_attacker, _last_pin_defender]
+	hud.banner("", 0.0)
+	await replay.play(start, length, subjects)
 
 
 func _crowd(sfx: String, volume: float) -> void:
@@ -361,6 +440,7 @@ func _crowd(sfx: String, volume: float) -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	AudioDirector.crowd_ambience(false)
 
 
 func _on_landed_outside(w: Wrestler, at: Vector3) -> void:
@@ -371,6 +451,7 @@ func _on_landed_outside(w: Wrestler, at: Vector3) -> void:
 			camera.shake(1.6)
 			hud.banner("THROUGH THE TABLE!", 1.6)
 			_crowd("crowd_pop", -4.0)
+			excite(0.45, 0.8)
 			for o in w.opponents:
 				o.gain_momentum(15.0)
 			return

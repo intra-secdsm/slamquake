@@ -6,6 +6,9 @@ Godot loads the exported `.glb` files from `game/assets/generated/`.
 ```bash
 tools/build_assets.sh                 # all targets, full quality (~15 s)
 tools/build_assets.sh wrestler --quick  # coarse mesh for fast iteration (~3 s)
+tools/build_assets.sh arena           # seating, stage, titantron, ramp, truss (crowd is instanced in Godot)
+python3 tools/synth_sfx.py            # sound effects
+tools/synth_music.sh                  # music and crowd loops (Blender's Python, for numpy)
 tools/screenshot.sh res://match/showcase.tscn /tmp/shot.png 30 --cam=face
 ```
 

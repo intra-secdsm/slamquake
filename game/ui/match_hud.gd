@@ -19,6 +19,8 @@ var _count_label: Label
 var _popups: Array[Dictionary] = []
 var _flash: ColorRect
 var _time := 0.0
+var _card: Control
+var _help_wanted := true
 
 
 func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
@@ -152,13 +154,51 @@ func set_status(w: Wrestler, text: String) -> void:
 	(bar["holder"] as Control).modulate.a = 0.55 if dim else 1.0
 
 
+## Show or hide the health bars and controls (hidden during entrances and replays).
+func show_bars(on: bool) -> void:
+	for w in _bars:
+		(_bars[w]["holder"] as Control).visible = on
+	_help.visible = on and _help_wanted
+
+
+## Lower-third caption for entrances ("" hides it).
+func name_card(title: String, subtitle: String) -> void:
+	if _card == null:
+		_card = Control.new()
+		_card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		_card.position = Vector2(60, -230)
+		_root.add_child(_card)
+		var bar := ColorRect.new()
+		bar.color = Color(0, 0, 0, 0.6)
+		bar.size = Vector2(900, 120)
+		_card.add_child(bar)
+		var stripe := ColorRect.new()
+		stripe.color = Color("ff2bd6")
+		stripe.size = Vector2(10, 120)
+		_card.add_child(stripe)
+		for i in 2:
+			var l := Label.new()
+			l.position = Vector2(30, 6 if i == 0 else 78)
+			l.add_theme_font_size_override("font_size", 60 if i == 0 else 26)
+			l.add_theme_color_override("font_color", Color.WHITE if i == 0 else Color("ffd400"))
+			l.add_theme_color_override("font_outline_color", Color("ff2bd6") if i == 0 else Color.BLACK)
+			l.add_theme_constant_override("outline_size", 10 if i == 0 else 6)
+			_card.add_child(l)
+	_card.visible = title != ""
+	(_card.get_child(2) as Label).text = title
+	(_card.get_child(3) as Label).text = subtitle
+	_card.modulate.a = 0.0
+	create_tween().tween_property(_card, "modulate:a", 1.0, 0.3)
+
+
 func flash() -> void:
 	_flash.color.a = 0.85
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F1:
-		_help.visible = not _help.visible
+		_help_wanted = not _help_wanted
+		_help.visible = _help_wanted
 
 
 func _process(delta: float) -> void:

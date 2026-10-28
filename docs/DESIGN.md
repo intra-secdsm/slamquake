@@ -158,3 +158,10 @@ M3 is the key gate: the core grapple and animation approach must feel good there
   - **Saves and double teams:** a strike on the pinner breaks the pin. The double suplex reuses the suplex animations for two side-by-side attackers.
   - **Partner AI:** saves (35–80% per pin by difficulty), returns to the corner, tags out when hurt, and occasionally comes in for a double team.
   - **Fix:** distance checks that used a normalized vector, which had also made the grab range unlimited since M3.
+- **M7 (v0.7):**
+  - **Arena** (`blender/wrestle_gen/arena.py`): seating tiers, stage, ramp, truss and walls. About 3,000 instanced fans with vertex-shader animation, plus signs and camera flashes. Crowd "heat" comes from match events and drives the crowd's animation, its noise and the sweep speed of the house lights.
+  - **Titantron:** a SubViewport with a neon shader.
+  - **Entrances:** theme, pyro and a walk down the ramp, then a roll into the ring or a climb onto the apron. Skippable.
+  - **Replay:** an 8 s transform/animation ring buffer replays the last finisher, or the run-up to the pin, through a VHS shader.
+  - **Front end:** title screen, setup panel with live 3D picks, options, and a CRT shader.
+  - **Audio:** synthesized music and crowd loops. Settings drive the audio buses.
