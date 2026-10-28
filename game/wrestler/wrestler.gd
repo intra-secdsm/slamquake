@@ -34,7 +34,10 @@ const LOCK_ON_RANGE := 3.0
 const GRAB_RANGE := 1.15
 const GROUND_RANGE := 1.1        # reach to a downed opponent's body line
 const TIEUP_TIMEOUT := 1.8
-const CORNER_TIME := 2.4
+const CORNER_TIME := 2.4         # total time stuck in a corner, however often you're hit there
+const CORNER_MAX_HITS := 3        # strikes soaked in the corner before stumbling out
+const DOWN_MAX := 4.5             # total time on the mat before you're up, whatever they do to you
+const WAKE_GRACE := 0.6           # can't be hit or grabbed just after getting back up
 const STUN_TIME := 1.1
 
 const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State.PINNED, State.KICKOUT,
@@ -76,6 +79,11 @@ var _down_left := 0.0
 var _run_dir := Vector3.FORWARD
 var _auto_run := 0.0
 var _combo_hits := 0
+var _downed_for := 0.0           # time spent down since last standing (survives stomps and elbow drops)
+var _down_cap := DOWN_MAX
+var _grace := 0.0
+var _corner_clock := 0.0
+var _corner_hits := 0
 var _combo_timer := 0.0
 var _rope_normal := Vector3.ZERO
 var _rope_point := Vector3.ZERO
@@ -149,11 +157,11 @@ func is_running() -> bool:
 
 
 func can_be_hit() -> bool:
-	return not invulnerable and state not in DOWNED and state not in BUSY
+	return not invulnerable and _grace <= 0.0 and state not in DOWNED and state not in BUSY
 
 
 func can_be_grappled() -> bool:
-	return state in [State.IDLE, State.BLOCK, State.HITSTUN, State.STUN, State.TAUNT, State.CORNERED,
+	return _grace <= 0.0 and state in [State.IDLE, State.BLOCK, State.HITSTUN, State.STUN, State.TAUNT, State.CORNERED,
 		State.STRIKE, State.GRAB_WHIFF, State.CORNER_EXIT]
 
 
@@ -216,6 +224,11 @@ func _physics_process(delta: float) -> void:
 
 	state_time += delta
 	_combo_timer -= delta
+	_grace -= delta
+	if state in [State.DOWN, State.DOWN_HIT] or (state in [State.PAIRED, State.HELD] and _downed_for > 0.0):
+		_downed_for += delta
+	elif state not in DOWNED:
+		_downed_for = 0.0
 	if _combo_timer <= 0.0:
 		_combo_hits = 0
 
@@ -227,7 +240,7 @@ func _physics_process(delta: float) -> void:
 		State.HITSTUN: _st_timed(float(_move.get("stun", 0.4)))
 		State.KNOCKDOWN: _st_knockdown(delta)
 		State.DOWN: _st_down(delta)
-		State.GETUP: _st_anim_then_idle("getup")
+		State.GETUP: _st_getup(delta)
 		State.REBOUND: _st_rebound(delta)
 		State.TAUNT: _st_anim_then_idle("taunt")
 		State.GRAB_WHIFF: _st_anim_then_idle("grab_whiff")
@@ -237,7 +250,7 @@ func _physics_process(delta: float) -> void:
 		State.WHIPPED: _st_whipped(delta)
 		State.CORNER_HIT: _st_corner_hit(delta)
 		State.CORNERED: _st_cornered(delta)
-		State.CORNER_EXIT: _st_anim_then_idle("corner_exit")
+		State.CORNER_EXIT: _st_corner_exit(delta)
 		State.STOMP: _st_stomp(delta)
 		State.DOWN_HIT: _st_down_hit(delta)
 		State.PINNING: _hold_still()
@@ -348,6 +361,8 @@ func _st_idle(delta: float) -> void:
 
 ## Context-sensitive offence from a buffered button. Returns true if something started.
 func _try_action(action: String) -> bool:
+	if action != "block":
+		_grace = 0.0     # attacking gives up the wake-up protection
 	var target := nearest_opponent()
 	var downed := target != null and target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE
 	if held_item:
@@ -512,8 +527,12 @@ func receive_strike(attacker: Wrestler, mv: Dictionary) -> void:
 		return  # e.g. that shot was a disqualification
 
 	if state in [State.CORNERED, State.CORNER_HIT]:
-		# pinned against the turnbuckle: soak it up and stay in the corner
-		_enter(State.CORNER_HIT, 0.04)
+		# pinned against the turnbuckle: soak up a few, then stumble out
+		_corner_hits += 1
+		if _corner_hits >= CORNER_MAX_HITS or health <= 0.0:
+			_leave_corner()
+		else:
+			_enter(State.CORNER_HIT, 0.04)
 		return
 	var perched := state == State.PERCH
 	_face(from, 0.0, true)
@@ -576,6 +595,7 @@ func _st_knockdown(_delta: float) -> void:
 
 func _go_down(extra: float = 0.0) -> void:
 	_down_left = DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5 + extra
+	_down_cap = maxf(DOWN_MAX, _down_left)
 	_enter(State.DOWN)
 
 
@@ -586,9 +606,19 @@ func _st_down(delta: float) -> void:
 		return
 	_down_left -= delta
 	if controller and controller.mash:
-		_down_left -= 0.12
-	if _down_left <= 0.0 and (health > 0.0 or infinite_health or state_time > 6.0):
+		_down_left -= 0.15
+		_downed_for += 0.05
+	var alive := health > 0.0 or infinite_health
+	if (alive and (_down_left <= 0.0 or _downed_for >= _down_cap)) or _downed_for >= maxf(6.0, _down_cap):
 		_enter(State.GETUP)
+
+
+func _st_getup(_delta: float) -> void:
+	velocity.x = _push.x
+	velocity.z = _push.z
+	if state_time >= _anim_length("getup") - 0.02:
+		_enter(State.IDLE)
+		_grace = WAKE_GRACE
 
 
 func _st_celebrate(_delta: float) -> void:
@@ -918,6 +948,8 @@ func _st_whipped(_delta: float) -> void:
 			global_position = Vector3(spot.x, global_position.y, spot.z)
 			_face(-_flat(spot, Vector3.FORWARD), 0.0, true)
 			_whipped = false
+			_corner_clock = 0.0
+			_corner_hits = 0
 			_enter(State.CORNER_HIT)
 			AudioDirector.play("hit_heavy", global_position + Vector3.UP * 1.2, -3.0)
 			landed_on_canvas.emit(self)
@@ -939,17 +971,38 @@ func _corner_spot(i: int) -> Vector3:
 	return Vector3(signf(c.x) * lim, global_position.y, signf(c.z) * lim)
 
 
-func _st_corner_hit(_delta: float) -> void:
+func _st_corner_hit(delta: float) -> void:
 	_hold_still()
-	if state_time >= _anim_length("corner_hit"):
+	_corner_tick(delta)
+	if state == State.CORNER_HIT and state_time >= _anim_length("corner_hit"):
 		_enter(State.CORNERED)
 
 
-func _st_cornered(_delta: float) -> void:
+func _st_cornered(delta: float) -> void:
 	_hold_still()
-	if state_time >= CORNER_TIME:
-		_push = facing() * 1.5
-		_enter(State.CORNER_EXIT)
+	_corner_tick(delta)
+
+
+## The corner timer keeps running through hits; mashing shakes it off sooner.
+func _corner_tick(delta: float) -> void:
+	_corner_clock += delta
+	if controller and controller.mash:
+		_corner_clock += 0.12
+	if _corner_clock >= CORNER_TIME:
+		_leave_corner()
+
+
+func _leave_corner() -> void:
+	_push = facing() * 1.5
+	_enter(State.CORNER_EXIT)
+
+
+func _st_corner_exit(_delta: float) -> void:
+	velocity.x = _push.x
+	velocity.z = _push.z
+	if state_time >= _anim_length("corner_exit") - 0.02:
+		_enter(State.IDLE)
+		_grace = WAKE_GRACE * 0.6
 
 
 # ---------------------------------------------------------------- ground offence and pins
