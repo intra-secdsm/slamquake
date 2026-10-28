@@ -10,7 +10,13 @@ const MAX_WRESTLERS := 24
 const NAME_MAX := 18
 const TAGLINE_MAX := 32
 
-static var path := "user://created_wrestlers.json"   ## tests point this somewhere else
+## Tests point this somewhere else. Kept in ProjectSettings because a script's static
+## variables start over whenever the script is reloaded.
+static var path: String:
+	get:
+		return ProjectSettings.get_setting("wrestle/caw_save_path", "user://created_wrestlers.json")
+	set(value):
+		ProjectSettings.set_setting("wrestle/caw_save_path", value)
 static var _entries: Array[Dictionary] = []
 static var _loaded := false
 
@@ -27,7 +33,8 @@ static func reload() -> void:
 	_entries.clear()
 	if not FileAccess.file_exists(path):
 		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var json := JSON.new()
+	var data: Variant = json.data if json.parse(FileAccess.get_file_as_string(path)) == OK else null
 	if not data is Dictionary:
 		push_warning("CawStore: %s is not valid JSON; ignoring it" % path)
 		return

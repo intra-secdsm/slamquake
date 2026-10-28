@@ -7,7 +7,6 @@ var _saved_path := ""
 
 
 func before_each() -> void:
-	_saved_path = CawStore.path
 	CawStore.path = TEST_PATH
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
 	CawStore.reload()
@@ -15,6 +14,16 @@ func before_each() -> void:
 
 func after_each() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
+	CawStore.reload()
+
+
+# the test file is used for the whole script, so nothing can ever touch the real saves
+func before_all() -> void:
+	_saved_path = CawStore.path
+	CawStore.path = TEST_PATH
+
+
+func after_all() -> void:
 	CawStore.path = _saved_path
 	CawStore.reload()
 
