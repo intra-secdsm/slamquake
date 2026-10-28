@@ -16,5 +16,5 @@ for t in "${times[@]}"; do
   files+=("$f")
 done
 [[ ${#files[@]} -gt 0 ]] || exit 1
-python3 "$ROOT/tools/grid.py" "$out" --crop 260,40,1340,860 --labels "${times[@]/#/t=}" -- "${files[@]}"
+python3 "$ROOT/tools/grid.py" "$out" --crop 200,0,1400,900 --labels "${times[@]/#/t=}" -- "${files[@]}"
 echo "$out"

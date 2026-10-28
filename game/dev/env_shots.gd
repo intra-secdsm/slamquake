@@ -177,18 +177,21 @@ func _stage_move(a: Wrestler, b: Wrestler, ca: Hold, id: String) -> void:
 		a.moves[slot] = id
 	if not Movesets.is_available(id):
 		push_warning("env_shots: %s has no animation in this build" % id)
-	a.global_position = Vector3(-0.45, y, 0.3)
-	b.global_position = Vector3(0.45, y, 0.3)
+	a.global_position = Vector3(-0.45, y, -0.6)
+	b.global_position = Vector3(0.45, y, -0.6)
 	a.rotation.y = PI / 2
 	b.rotation.y = -PI / 2
 	_watch([a, b], DevTools.get_arg("cam", "side"))
+	if DevTools.get_arg("cam", "side") != "match":
+		m.hud.visible = false
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	match slot:
 		"kick":
 			a._start_strike(id)
 		"running":
-			a.global_position.x = -3.4
+			a.global_position.x = -2.4
+			b.global_position.x = 0.9
 			a.rotation.y = PI / 2
 			ca.hold_move = Vector3.RIGHT
 			ca.hold_run = true
@@ -246,7 +249,7 @@ func _watch(subjects: Array[Wrestler], mode: String) -> void:
 	_cam_subjects = subjects
 	_cam_side = 1.0 if mode == "side" else -1.0
 	_cam = Camera3D.new()
-	_cam.fov = 58
+	_cam.fov = 62
 	add_child(_cam)
 	_cam.process_mode = Node.PROCESS_MODE_ALWAYS
 	_update_cam(1.0)
@@ -264,7 +267,11 @@ func _update_cam(weight: float) -> void:
 	mid /= maxf(1.0, _cam_subjects.size())
 	var y := Ring.canvas_height()
 	var target := Vector3(mid.x, y + 0.85, mid.z)
-	var eye := target + (Vector3(0, 0.35, 2.7) if _cam_side > 0.0 else Vector3(2.7, 0.35, 0.0))
+	var eye := target + (Vector3(0, 0.4, 3.0) if _cam_side > 0.0 else Vector3(3.0, 0.4, 0.0))
+	# stay inside the ropes so they never block the view
+	var lim := float(Ring.spec()["post_half"]) - 0.25
+	eye.x = clampf(eye.x, -lim, lim)
+	eye.z = clampf(eye.z, -lim, lim)
 	var want := Transform3D(Basis.IDENTITY, eye).looking_at(target)
 	_cam.global_transform = _cam.global_transform.interpolate_with(want, weight) if weight < 1.0 else want
 	_cam.current = true
