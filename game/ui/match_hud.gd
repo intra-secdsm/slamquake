@@ -133,11 +133,23 @@ func popup(text: String, w: Wrestler) -> void:
 	l.add_theme_color_override("font_outline_color", bar["color"])
 	l.add_theme_constant_override("outline_size", 12)
 	var holder: Control = bar["holder"]
-	l.position = Vector2(BAR_W - 260 if bar["right"] else 10, BAR_H + 46)
+	l.position = Vector2(BAR_W - 260 if bar["right"] else 10, BAR_H + 62)
 	l.size = Vector2(250, 50)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if bar["right"] else HORIZONTAL_ALIGNMENT_LEFT
 	holder.add_child(l)
 	_popups.append({"label": l, "t": 1.1})
+
+
+## Small line under a wrestler's name ("on the apron", "ILLEGAL 3"); "" hides it.
+func set_status(w: Wrestler, text: String) -> void:
+	if not _bars.has(w):
+		return
+	var bar: Dictionary = _bars[w]
+	var l: Label = bar["status"]
+	if l.text != text:
+		l.text = text
+	var dim := w.on_apron() and not w.legal
+	(bar["holder"] as Control).modulate.a = 0.55 if dim else 1.0
 
 
 func flash() -> void:
@@ -187,7 +199,7 @@ func _process(delta: float) -> void:
 func _add_bar(w: Wrestler, i: int) -> void:
 	var right := i % 2 == 1
 	var holder := Control.new()
-	holder.position = Vector2(40 if not right else 0, 36 + (i / 2) * 90)
+	holder.position = Vector2(40 if not right else 0, 36 + (i / 2) * 104)
 	if right:
 		holder.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 		holder.position.x = -BAR_W - 40
@@ -247,8 +259,18 @@ func _add_bar(w: Wrestler, i: int) -> void:
 	name_label.add_theme_color_override("font_outline_color", COLORS[i])
 	name_label.add_theme_constant_override("outline_size", 6)
 	holder.add_child(name_label)
+	var status := Label.new()
+	status.position = Vector2(4, BAR_H + 40)
+	status.size = Vector2(BAR_W, 24)
+	if right:
+		status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status.add_theme_font_size_override("font_size", 18)
+	status.add_theme_color_override("font_color", Color("ffd400"))
+	status.add_theme_color_override("font_outline_color", Color.BLACK)
+	status.add_theme_constant_override("outline_size", 6)
+	holder.add_child(status)
 	_bars[w] = {"fill": fill, "lag": lag, "right": right, "full": BAR_W - 12, "holder": holder, "color": COLORS[i],
-		"mfill": mfill, "mfull": mbg.size.x - 2, "mx": mbg.position.x + 1, "special": special}
+		"mfill": mfill, "mfull": mbg.size.x - 2, "mx": mbg.position.x + 1, "special": special, "status": status}
 
 
 func _on_health(w: Wrestler) -> void:

@@ -15,12 +15,16 @@ signal landed_outside(w: Wrestler, at: Vector3)
 signal momentum_changed(w: Wrestler)
 signal special_ready(w: Wrestler)
 signal reversed(by: Wrestler, victim: Wrestler, kind: String)   ## kind: "parry" or "reversal"
+signal tagged(out: Wrestler, into: Wrestler, hot: bool)
+signal pin_saved(by: Wrestler, pinner: Wrestler)
+signal double_team(a: Wrestler, b: Wrestler, victim: Wrestler)
 
 enum State {
 	IDLE, RUN, STRIKE, BLOCK, HITSTUN, KNOCKDOWN, DOWN, GETUP, REBOUND, TAUNT,
 	GRAB_WHIFF, TIEUP, HELD, PAIRED, WHIPPED, CORNER_HIT, CORNERED, CORNER_EXIT,
 	STOMP, DOWN_HIT, PINNING, PINNED, KICKOUT, COVER_RELEASE, STUN, CELEBRATE,
 	EXIT_RING, ENTER_RING, FALL_OUT, CLIMB, PERCH, CLIMB_DOWN, DIVE, DIVE_LAND, ITEM_PICKUP, CHAIR_SWING, PARRY,
+	APRON, APRON_ENTER, APRON_EXIT,
 }
 
 const WALK_SPEED := 2.5
@@ -45,15 +49,20 @@ const MOMENTUM_MAX := 100.0
 const SPECIAL_TIME := 20.0        # how long a full meter stays banked as a SPECIAL
 const PARRY_WINDOW := 0.2         # block pressed this close before a strike lands parries it
 const MASH_GUARD := 0.45          # a block press this soon after the previous one never counts
+const TAG_REACH := 1.25           # how close to your partner's apron spot you must be to tag
+const ILLEGAL_TIME := 5.0         # seconds an illegal partner may stay in before being sent back
+const APRON_REGEN := 0.2          # health per second recovered while tagged out
 const STUN_TIME := 1.1
 
 const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State.PINNED, State.KICKOUT,
 	State.FALL_OUT, State.DIVE_LAND]
 const BUSY := [State.TIEUP, State.HELD, State.PAIRED, State.PINNING, State.PINNED, State.CELEBRATE,
-	State.EXIT_RING, State.ENTER_RING, State.CLIMB, State.CLIMB_DOWN, State.DIVE]
+	State.EXIT_RING, State.ENTER_RING, State.CLIMB, State.CLIMB_DOWN, State.DIVE,
+	State.APRON, State.APRON_ENTER, State.APRON_EXIT]
 ## states whose motion is fully scripted (no gravity, collision response or ring clamping)
 const SCRIPTED := [State.PAIRED, State.HELD, State.TIEUP, State.PINNING, State.PINNED, State.EXIT_RING,
-	State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.PERCH, State.CLIMB_DOWN, State.DIVE]
+	State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.PERCH, State.CLIMB_DOWN, State.DIVE,
+	State.APRON, State.APRON_ENTER, State.APRON_EXIT]
 ## states in which a held chair stays in hand
 const ITEM_OK := [State.IDLE, State.CHAIR_SWING, State.ITEM_PICKUP, State.EXIT_RING, State.ENTER_RING]
 const EDGE_PUSH_TIME := 0.35
@@ -65,6 +74,14 @@ const CHAIR_SHOT := {"id": "chair_shot", "damage": 14.0, "knockdown": true, "kno
 
 var controller: WrestlerController
 var opponents: Array[Wrestler] = []
+# tag team (teammate == null in singles)
+var teammate: Wrestler
+var team := 0
+var legal := true                ## the one wrestler per team who may pin and be pinned
+var apron_spot := Vector3.ZERO   ## where this team's partner waits (world space)
+var illegal_time := 0.0
+var forced_return := false       ## the referee is sending this illegal partner back to the apron
+var _helper: Wrestler            # teammate joining in on a double-team move
 var ring: Ring
 var model: WrestlerModel
 var state: State = State.IDLE
@@ -207,11 +224,27 @@ func nearest_opponent() -> Wrestler:
 	var best: Wrestler = null
 	var best_d := INF
 	for o in opponents:
+		if o.on_apron():
+			continue
 		var d := global_position.distance_squared_to(o.global_position)
 		if d < best_d:
 			best_d = d
 			best = o
 	return best
+
+
+func on_apron() -> bool:
+	return state in [State.APRON, State.APRON_ENTER, State.APRON_EXIT]
+
+
+func can_pin(target: Wrestler) -> bool:
+	return teammate == null or (legal and target.legal)
+
+
+## Just inside the ropes from this team's apron spot.
+func entry_spot() -> Vector3:
+	var inward := -signf(apron_spot.z)
+	return Vector3(apron_spot.x, apron_spot.y, apron_spot.z + inward * _root_dist("apron_enter"))
 
 
 func flat_dir_to(o: Node3D) -> Vector3:
@@ -236,6 +269,13 @@ func _physics_process(delta: float) -> void:
 		if special_left <= 0.0:
 			momentum = MOMENTUM_MAX * 0.5
 			momentum_changed.emit(self)
+	if teammate and not legal and not match_over:
+		if on_apron():
+			illegal_time = 0.0
+			forced_return = false
+		else:
+			illegal_time += delta
+			forced_return = forced_return or illegal_time > ILLEGAL_TIME
 	if special_left > 0.0:
 		model.set_aura(0.55 + 0.45 * sin(_clock * 9.0))
 		_aura_on = true
@@ -273,6 +313,8 @@ func _physics_process(delta: float) -> void:
 		State.REBOUND: _st_rebound(delta)
 		State.TAUNT: _st_taunt(delta)
 		State.PARRY: _st_parry(delta)
+		State.APRON: _st_apron(delta)
+		State.APRON_ENTER, State.APRON_EXIT: _st_root_anim(delta)
 		State.GRAB_WHIFF: _st_anim_then_idle("grab_whiff")
 		State.TIEUP: _st_tieup(delta)
 		State.HELD: _hold_still()
@@ -346,7 +388,7 @@ func _enter(s: State, blend: float = -1.0) -> void:
 		State.PINNING: ["cover_hold", 0.0], State.PINNED: ["down", 0.0], State.KICKOUT: ["kickout", 0.05],
 		State.COVER_RELEASE: ["cover_release", 0.0], State.STUN: ["groggy", 0.15], State.CELEBRATE: ["taunt", 0.2],
 		State.PERCH: ["perch", 0.1], State.DIVE_LAND: ["dive_land", 0.05], State.ITEM_PICKUP: ["item_pickup", 0.1],
-		State.CHAIR_SWING: ["chair_swing", 0.06], State.PARRY: ["parry", 0.04],
+		State.CHAIR_SWING: ["chair_swing", 0.06], State.PARRY: ["parry", 0.04], State.APRON: ["apron_wait", 0.2],
 	}
 	if anims.has(s):
 		_play(anims[s][0], anims[s][1] if blend < 0.0 else blend, true)
@@ -358,6 +400,11 @@ func _st_idle(delta: float) -> void:
 	if action != "" and _try_action(action):
 		return
 	var mv := c.move if c else Vector3.ZERO
+	if teammate and not legal:
+		if forced_return:
+			mv = _forced_move()
+		if _try_return_to_apron(mv):
+			return
 	if _edge_push(mv, delta):
 		return
 	if held_item:
@@ -430,7 +477,7 @@ func _try_action(action: String) -> bool:
 			return true
 		"block":
 			# pinfalls only count in the ring
-			if downed and not outside and not target.outside:
+			if downed and not outside and not target.outside and can_pin(target):
 				_start_paired("cover", target)
 				return true
 	return false
@@ -527,12 +574,17 @@ func _st_strike(_delta: float) -> void:
 func _resolve_hit() -> void:
 	var landed := false
 	for o in opponents:
-		if not o.can_be_hit():
+		var saving := o.state == State.PINNING and o.partner != null and o.partner.team == team
+		if not o.can_be_hit() and not saving:
 			continue
 		var to := o.global_position - global_position
 		to.y = 0
 		var d := to.length()
-		if d > float(_move["reach"]):
+		if d > float(_move["reach"]) + (0.3 if saving else 0.0):
+			continue
+		if saving:
+			o._broken_up(self)
+			landed = true
 			continue
 		if d > 0.05 and rad_to_deg(facing().angle_to(to)) > float(_move["arc"]):
 			continue
@@ -570,7 +622,7 @@ func finisher_name() -> String:
 
 ## A finisher can be hit straight onto a dazed opponent, or from a tie-up.
 func _finisher_ready_on(t: Wrestler) -> bool:
-	var d := _flat(t.global_position - global_position, Vector3.ZERO).length()
+	var d := _flat_len(t.global_position - global_position)
 	return t.can_be_grappled() and t.outside == outside and d < GRAB_RANGE + 0.15 \
 		and t.state in [State.STUN, State.HITSTUN, State.CORNERED, State.CORNER_EXIT]
 
@@ -762,12 +814,16 @@ func _st_celebrate(_delta: float) -> void:
 # ---------------------------------------------------------------- grappling
 
 func _try_grapple(target: Wrestler) -> void:
+	if _try_tag():
+		return
+	if target and _try_double_team(target):
+		return
 	if target == null:
 		if not _try_pick_up_item() and not _try_climb():
 			_enter(State.GRAB_WHIFF)
 		return
 	var to := flat_dir_to(target)
-	var d := _flat(target.global_position - global_position, Vector3.ZERO).length()
+	var d := _flat_len(target.global_position - global_position)
 	if target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE:
 		_start_paired("pickup", target)
 	elif target.is_running() and target.facing().dot(-to) > 0.6 and d < 1.8:
@@ -969,6 +1025,11 @@ func _begin_paired(other: Wrestler, mv: Dictionary, anchor: Transform3D, role: S
 
 func _st_paired(_delta: float) -> void:
 	_hold_still()
+	if _role == "a2":
+		# helping on a double team: the lead attacker ends the move for us
+		if state_time > float(_pair.get("length", 2.0)) + 0.3:
+			_end_paired(_pair, "a", partner)
+		return
 	if _role != "a":
 		if reversal_window() > 0.0 and _timed_block(_clock - state_time - 0.1):
 			_reverse_grapple()
@@ -1051,6 +1112,9 @@ func _finish_pair() -> void:
 	var p := partner
 	if p and p.state == State.PAIRED and p.partner == self:
 		p._end_paired(mv, "d", self)
+	if _helper and _helper.state == State.PAIRED and _helper._role == "a2":
+		_helper._end_paired(mv, "a", p)
+	_helper = null
 	_end_paired(mv, "a", p)
 
 
@@ -1253,6 +1317,8 @@ func _st_kickout(_delta: float) -> void:
 
 func win() -> void:
 	match_over = true
+	if on_apron():
+		return       # the partner on the apron just stays put
 	partner = null
 	_set_solid(true)
 	_enter(State.CELEBRATE)
@@ -1260,6 +1326,8 @@ func win() -> void:
 
 func lose() -> void:
 	match_over = true
+	if on_apron():
+		return
 	partner = null
 	_set_solid(true)
 	if state != State.DOWN:
@@ -1297,6 +1365,11 @@ func _set_solid(solid: bool) -> void:
 
 func _flat_xform() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, rotation.y), Vector3(global_position.x, global_position.y, global_position.z))
+
+
+## Horizontal length of a vector.
+static func _flat_len(v: Vector3) -> float:
+	return Vector2(v.x, v.z).length()
 
 
 static func _flat(v: Vector3, fallback: Vector3) -> Vector3:
@@ -1477,6 +1550,7 @@ func _st_root_anim(_delta: float) -> void:
 	match state:
 		State.FALL_OUT: _go_down(0.5)
 		State.CLIMB: _enter(State.PERCH, 0.0)
+		State.APRON_EXIT: _enter(State.APRON, 0.0)
 		_: _enter(State.IDLE, 0.0)
 
 
@@ -1681,3 +1755,124 @@ func drop_item(throw_velocity: Vector3 = Vector3.ZERO) -> void:
 	held_item = null
 	item.drop(get_parent(), throw_velocity)
 
+
+
+# ---------------------------------------------------------------- tag team
+
+func _st_apron(delta: float) -> void:
+	global_position = apron_spot
+	_face(Vector3(0, 0, -signf(apron_spot.z)), 0.0, true)
+	if health < MAX_HEALTH and not match_over:
+		health = minf(MAX_HEALTH, health + APRON_REGEN * delta)
+		health_changed.emit(self)
+	var wants := teammate != null and teammate.legal and teammate.is_standing() and not teammate.outside \
+		and _flat_len(teammate.global_position - entry_spot()) < TAG_REACH + 0.8
+	_play("apron_reach" if wants else "apron_wait", 0.2)
+	if match_over or controller == null:
+		return
+	# push toward the ring to climb in (illegally, unless tagged)
+	var inward := Vector3(0, 0, -signf(apron_spot.z))
+	if controller.move.length() > 0.5 and controller.move.normalized().dot(inward) > 0.7:
+		_edge_time += delta
+		if _edge_time >= EDGE_PUSH_TIME:
+			enter_from_apron()
+	else:
+		_edge_time = 0.0
+
+
+## Step through the ropes into the ring (legal if we were just tagged in).
+func enter_from_apron() -> void:
+	global_position = apron_spot
+	_face(Vector3(0, 0, -signf(apron_spot.z)), 0.0, true)
+	_start_root_anim(State.APRON_ENTER, "apron_enter")
+
+
+## Step out to the apron from just inside the ropes at our corner.
+func exit_to_apron() -> void:
+	var e := entry_spot()
+	global_position = Vector3(e.x, global_position.y, e.z)
+	_face(Vector3(0, 0, signf(apron_spot.z)), 0.0, true)
+	forced_return = false
+	_start_root_anim(State.APRON_EXIT, "apron_exit")
+
+
+func _try_tag() -> bool:
+	if teammate == null or not legal or outside or held_item or teammate.state != State.APRON:
+		return false
+	if _flat_len(global_position - entry_spot()) > TAG_REACH:
+		return false
+	var hot := health < MAX_HEALTH * 0.5
+	legal = false
+	teammate.legal = true
+	teammate.illegal_time = 0.0
+	exit_to_apron()
+	teammate.enter_from_apron()
+	if hot:
+		teammate.gain_momentum(25.0)
+	tagged.emit(self, teammate, hot)
+	return true
+
+
+## An illegal partner near their corner, pushing toward the apron, steps back out.
+func _try_return_to_apron(mv: Vector3) -> bool:
+	if outside or held_item:
+		return false
+	if _flat_len(entry_spot() - global_position) > 0.45:
+		return false
+	var out := Vector3(0, 0, signf(apron_spot.z))
+	if forced_return or (mv.length() > 0.5 and mv.normalized().dot(out) > 0.7):
+		exit_to_apron()
+		return true
+	return false
+
+
+## Where the referee is steering an illegal partner: back into the ring, then to their corner.
+func _forced_move() -> Vector3:
+	var goal := entry_spot()
+	if outside:
+		# head for the near side of the ring and push in under the ropes
+		var p := global_position
+		var axis := 0 if absf(p.x) > absf(p.z) else 2
+		var n := Vector3.ZERO
+		n[axis] = -signf(p[axis])
+		return n
+	var to := _flat(goal - global_position, Vector3.ZERO)
+	return to.normalized() if to.length() > 0.05 else Vector3.ZERO
+
+
+## Teammate has an opponent in a tie-up: join in for a double suplex.
+func _try_double_team(target: Wrestler) -> bool:
+	var a := teammate
+	if a == null or target.state != State.HELD or target.partner != a or a.state != State.TIEUP:
+		return false
+	if _flat_len(target.global_position - global_position) > 1.8 or target.outside != outside:
+		return false
+	var mv := Grapples.get_move("double_suplex")
+	var anchor := a._anchor
+	anchor.origin += _inside_shift(anchor, mv, target)
+	var side := anchor.basis.x * 0.36
+	target._begin_paired(a, mv, anchor, "d")
+	a._begin_paired(target, mv, anchor.translated(side), "a")
+	_begin_paired(target, mv, anchor.translated(-side), "a2")
+	a._anchor_base = a._anchor
+	a._anchor_shift = Vector3.ZERO
+	a._impact_done = false
+	a._released = false
+	a._helper = self
+	move_performed.emit(a, "double_suplex")
+	double_team.emit(a, self, target)
+	return true
+
+
+## A pinner hit by the pinned wrestler's partner: the pin is broken up.
+func _broken_up(by: Wrestler) -> void:
+	var d := partner
+	pin_saved.emit(by, self)
+	by.gain_momentum(10.0)
+	if d:
+		d.kick_out()
+	_set_solid(true)
+	partner = null
+	_push = by.flat_dir_to(self) * 2.5
+	_enter(State.KNOCKDOWN)
+	knocked_down.emit(self)
