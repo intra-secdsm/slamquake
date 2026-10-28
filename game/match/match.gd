@@ -43,6 +43,7 @@ func _ready() -> void:
 		w.name = "Wrestler%d" % (i + 1)
 		w.look = entry["look"]
 		w.display_name = entry["name"]
+		w.finisher = entry.get("finisher", "thunder_bomb")
 		w.ring = ring
 		if e["control"] == "human":
 			w.controller = PlayerController.new(e["slot"])
@@ -59,6 +60,9 @@ func _ready() -> void:
 		w.pin_started.connect(_on_pin_started)
 		w.kicked_out.connect(_on_kicked_out)
 		w.landed_outside.connect(_on_landed_outside)
+		w.move_performed.connect(_on_move_performed)
+		w.reversed.connect(_on_reversed)
+		w.special_ready.connect(_on_special_ready)
 		wrestlers.append(w)
 		camera.targets.append(w)
 
@@ -78,7 +82,9 @@ func _ready() -> void:
 
 	hud = MatchHud.new()
 	add_child(hud)
-	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip\n"
+	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip"
+		+ " · taunt with SPECIAL = FINISHER\n"
+		+ "Tap block just before a hit lands to PARRY · tap block as they start a move on you to REVERSE\n"
 		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN\n"
 		+ "Push into the ropes to roll out · grapple near a corner to climb · grapple near a chair to pick it up")
 	hud.setup(wrestlers, "\n".join(help))
@@ -214,8 +220,60 @@ func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked:
 	camera.shake(1.0 if heavy else 0.35)
 
 
-func _on_landed(_w: Wrestler) -> void:
+func _on_landed(w: Wrestler) -> void:
 	camera.shake(0.8)
+	if w.is_inside_tree():
+		HitFx.dust(self, Vector3(w.body_center().x, w.global_position.y + 0.02, w.body_center().z))
+
+
+func _on_move_performed(w: Wrestler, id: String) -> void:
+	var mv: Dictionary = Grapples.ALL.get(id, {})
+	if mv.get("finisher", false):
+		_finisher_cinematic(w, id)
+	elif float(mv.get("damage", 0.0)) >= 14.0:
+		_crowd("crowd_ooh", -8.0)
+
+
+func _on_reversed(by: Wrestler, _victim: Wrestler, kind: String) -> void:
+	hud.popup("REVERSAL!" if kind == "reversal" else "PARRY!", by)
+	if camera.in_cinematic():
+		camera.end_cinematic()
+		hud.banner("REVERSED!", 1.2)
+	if kind == "reversal":
+		_crowd("crowd_ooh", -6.0)
+
+
+func _on_special_ready(w: Wrestler) -> void:
+	hud.popup("SPECIAL!", w)
+
+
+## Slow-motion, a camera cut and a crowd pop for a finisher.
+func _finisher_cinematic(w: Wrestler, id: String) -> void:
+	var mv := Grapples.get_move(id)
+	var impact := float(mv["events"].get("impact", 1.0))
+	hud.banner(w.finisher_name() + "!", impact + 0.6)
+	camera.cinematic([w, w.partner], w.facing(), float(mv["length"]) + 0.3)
+	_crowd("crowd_ooh", -6.0)
+	await get_tree().create_timer(maxf(0.0, impact - 0.12), false, true).timeout
+	if not is_inside_tree() or w.state != Wrestler.State.PAIRED or w.partner == null:
+		Engine.time_scale = 1.0
+		return       # reversed
+	Engine.time_scale = 0.3
+	await get_tree().create_timer(0.38, false, true, true).timeout
+	Engine.time_scale = 1.0
+	if not is_inside_tree():
+		return
+	hud.flash()
+	camera.shake(2.0)
+	_crowd("crowd_pop", -2.0)
+
+
+func _crowd(sfx: String, volume: float) -> void:
+	AudioDirector.play(sfx, camera.global_position + camera.global_basis.z * -2.0, volume, 0.04)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 func _on_landed_outside(w: Wrestler, at: Vector3) -> void:
@@ -225,6 +283,9 @@ func _on_landed_outside(w: Wrestler, at: Vector3) -> void:
 			w._damage(10.0)
 			camera.shake(1.6)
 			hud.banner("THROUGH THE TABLE!", 1.6)
+			_crowd("crowd_pop", -4.0)
+			for o in w.opponents:
+				o.gain_momentum(15.0)
 			return
 
 

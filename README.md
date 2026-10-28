@@ -36,8 +36,8 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 | Kick (big boot; knocks down as a combo ender) | Y | I | Num 5 |
 | Grapple: tie-up; from behind = German suplex; vs a running opponent = back body drop | A | K | Num 2 |
 | Run (hold; bounce off the ropes; punch/kick while running = clothesline) | B | L | Num 3 |
-| Block (hold); press next to a downed opponent to **pin** | RB | Space | Num 0 |
-| Taunt | LB | U | Num 4 |
+| Block (hold); **tap** just before a hit = parry, as a move starts on you = reversal; next to a downed opponent = **pin** | RB | Space | Num 0 |
+| Taunt (builds momentum); with a SPECIAL = **finisher** | LB | U | Num 4 |
 | Get up faster / kick out of a pin | mash any button | | |
 | Pause | Start | Esc | Num Enter |
 
@@ -51,6 +51,15 @@ big hits near the ropes knock people out too. Grapple next to a corner to climb 
 dive (crossbody onto a standing opponent, elbow drop/splash onto a downed one); strike a perched opponent
 to knock them off. Grapple next to the chair to pick it up, punch to swing, grapple to drop it.
 Land someone on the ringside table to smash it.
+
+**Momentum and finishers:** landing offence, kicking out, parries, reversals and taunts fill the
+momentum meter under your health bar (you also gain a little from taking punishment). A full meter
+banks a **SPECIAL** for 20 seconds: you glow gold and hit a little harder. Press taunt in a tie-up, or
+next to a dazed opponent, to hit your finisher (Thunder Mack: Thunder Bomb, Zip Volta: Volt Shock,
+Bruno Kessler: Iron Drop). Kicking out right after a finisher is much harder.
+**Reversals:** tap block just before a strike lands to parry it and leave the striker open; tap block
+just as a tie-up move (or finisher, or Irish whip) starts on you to reverse it into a hip toss (or a
+reversed whip). Mashing block never works: a press right after another one doesn't count.
 
 Win by pinfall (pins under the ropes are broken). Normal rules add a 20-count count-out and
 disqualification for chair shots; No DQ allows anything and has no count-outs.
@@ -82,7 +91,7 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M2 | Movement, strikes, camera, HUD | ✅ |
 | M3 | Grapples, whips, rope rebounds, pinfalls: first full match | ✅ |
 | M4 | Top rope, outside the ring, chair, tables, count-outs | ✅ |
-| M5 | Momentum, finishers, reversals, game feel, AI | |
+| M5 | Momentum, finishers, reversals, game feel, AI | ✅ |
 | M6 | Tag team, 4 local players | |
 | M7 | Arena, crowd, entrances, menus, audio | |
 | M8 | Roster of 8 + Create-a-Wrestler | |

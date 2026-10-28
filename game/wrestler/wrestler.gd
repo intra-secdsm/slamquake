@@ -12,12 +12,15 @@ signal pin_started(attacker: Wrestler, defender: Wrestler)
 signal kicked_out(defender: Wrestler)
 signal move_performed(attacker: Wrestler, id: String)
 signal landed_outside(w: Wrestler, at: Vector3)
+signal momentum_changed(w: Wrestler)
+signal special_ready(w: Wrestler)
+signal reversed(by: Wrestler, victim: Wrestler, kind: String)   ## kind: "parry" or "reversal"
 
 enum State {
 	IDLE, RUN, STRIKE, BLOCK, HITSTUN, KNOCKDOWN, DOWN, GETUP, REBOUND, TAUNT,
 	GRAB_WHIFF, TIEUP, HELD, PAIRED, WHIPPED, CORNER_HIT, CORNERED, CORNER_EXIT,
 	STOMP, DOWN_HIT, PINNING, PINNED, KICKOUT, COVER_RELEASE, STUN, CELEBRATE,
-	EXIT_RING, ENTER_RING, FALL_OUT, CLIMB, PERCH, CLIMB_DOWN, DIVE, DIVE_LAND, ITEM_PICKUP, CHAIR_SWING,
+	EXIT_RING, ENTER_RING, FALL_OUT, CLIMB, PERCH, CLIMB_DOWN, DIVE, DIVE_LAND, ITEM_PICKUP, CHAIR_SWING, PARRY,
 }
 
 const WALK_SPEED := 2.5
@@ -38,6 +41,10 @@ const CORNER_TIME := 2.4         # total time stuck in a corner, however often y
 const CORNER_MAX_HITS := 3        # strikes soaked in the corner before stumbling out
 const DOWN_MAX := 4.5             # total time on the mat before you're up, whatever they do to you
 const WAKE_GRACE := 0.6           # can't be hit or grabbed just after getting back up
+const MOMENTUM_MAX := 100.0
+const SPECIAL_TIME := 20.0        # how long a full meter stays banked as a SPECIAL
+const PARRY_WINDOW := 0.2         # block pressed this close before a strike lands parries it
+const MASH_GUARD := 0.45          # a block press this soon after the previous one never counts
 const STUN_TIME := 1.1
 
 const DOWNED := [State.KNOCKDOWN, State.DOWN, State.GETUP, State.DOWN_HIT, State.PINNED, State.KICKOUT,
@@ -68,6 +75,9 @@ var infinite_health := false
 var match_over := false
 var outside := false             ## on the arena floor rather than in the ring
 var held_item: Chair
+var momentum := 0.0
+var special_left := 0.0          ## seconds left on a banked SPECIAL (finisher available)
+var finisher := "thunder_bomb"
 
 var _move: Dictionary = {}
 var _hit_done := false
@@ -84,6 +94,12 @@ var _down_cap := DOWN_MAX
 var _grace := 0.0
 var _corner_clock := 0.0
 var _corner_hits := 0
+var _stun_len := STUN_TIME
+var _clock := 0.0
+var _press_t := -99.0            # last block press (for parries and reversals)
+var _press_prev := -99.0
+var _finisher_hit := 0.0         # just took a finisher: kicking out is much harder
+var _aura_on := false
 var _combo_timer := 0.0
 var _rope_normal := Vector3.ZERO
 var _rope_point := Vector3.ZERO
@@ -213,6 +229,19 @@ func kickout_progress() -> float:
 # ---------------------------------------------------------------- main loop
 
 func _physics_process(delta: float) -> void:
+	_clock += delta
+	_finisher_hit -= delta
+	if special_left > 0.0 and state not in BUSY:
+		special_left -= delta
+		if special_left <= 0.0:
+			momentum = MOMENTUM_MAX * 0.5
+			momentum_changed.emit(self)
+	if special_left > 0.0:
+		model.set_aura(0.55 + 0.45 * sin(_clock * 9.0))
+		_aura_on = true
+	elif _aura_on:
+		model.set_aura(0.0)
+		_aura_on = false
 	if controller and not match_over:
 		controller.update(self, delta)
 		_buffer_inputs(delta)
@@ -242,7 +271,8 @@ func _physics_process(delta: float) -> void:
 		State.DOWN: _st_down(delta)
 		State.GETUP: _st_getup(delta)
 		State.REBOUND: _st_rebound(delta)
-		State.TAUNT: _st_anim_then_idle("taunt")
+		State.TAUNT: _st_taunt(delta)
+		State.PARRY: _st_parry(delta)
 		State.GRAB_WHIFF: _st_anim_then_idle("grab_whiff")
 		State.TIEUP: _st_tieup(delta)
 		State.HELD: _hold_still()
@@ -257,7 +287,7 @@ func _physics_process(delta: float) -> void:
 		State.PINNED: _st_pinned(delta)
 		State.KICKOUT: _st_kickout(delta)
 		State.COVER_RELEASE: _st_anim_then_idle("cover_release")
-		State.STUN: _st_timed(STUN_TIME)
+		State.STUN: _st_timed(_stun_len)
 		State.CELEBRATE: _st_celebrate(delta)
 		State.EXIT_RING, State.ENTER_RING, State.FALL_OUT, State.CLIMB, State.CLIMB_DOWN: _st_root_anim(delta)
 		State.PERCH: _st_perch(delta)
@@ -280,6 +310,9 @@ func _physics_process(delta: float) -> void:
 
 func _buffer_inputs(delta: float) -> void:
 	_buffer_time -= delta
+	if controller.block_pressed:
+		_press_prev = _press_t
+		_press_t = _clock
 	for b in ["punch", "kick", "grapple", "block"]:
 		var pressed: bool = controller.get(b) if b != "block" else controller.block_pressed
 		if pressed:
@@ -303,6 +336,7 @@ func _enter(s: State, blend: float = -1.0) -> void:
 	state = s
 	state_time = 0.0
 	invulnerable = s == State.GETUP
+	_stun_len = STUN_TIME
 	var anims := {
 		State.IDLE: ["idle", 0.2], State.RUN: ["run", 0.12], State.BLOCK: ["block", 0.08],
 		State.KNOCKDOWN: ["knockdown", 0.05], State.DOWN: ["down", 0.25], State.GETUP: ["getup", 0.15],
@@ -312,7 +346,7 @@ func _enter(s: State, blend: float = -1.0) -> void:
 		State.PINNING: ["cover_hold", 0.0], State.PINNED: ["down", 0.0], State.KICKOUT: ["kickout", 0.05],
 		State.COVER_RELEASE: ["cover_release", 0.0], State.STUN: ["groggy", 0.15], State.CELEBRATE: ["taunt", 0.2],
 		State.PERCH: ["perch", 0.1], State.DIVE_LAND: ["dive_land", 0.05], State.ITEM_PICKUP: ["item_pickup", 0.1],
-		State.CHAIR_SWING: ["chair_swing", 0.06],
+		State.CHAIR_SWING: ["chair_swing", 0.06], State.PARRY: ["parry", 0.04],
 	}
 	if anims.has(s):
 		_play(anims[s][0], anims[s][1] if blend < 0.0 else blend, true)
@@ -333,7 +367,12 @@ func _st_idle(delta: float) -> void:
 		_enter(State.BLOCK)
 		return
 	if c and c.taunt:
-		_enter(State.TAUNT)
+		var t := nearest_opponent()
+		if has_special() and t and _finisher_ready_on(t):
+			_face(flat_dir_to(t), 0.0, true)
+			_start_finisher(t)
+		else:
+			_enter(State.TAUNT)
 		return
 	if c and c.run_held:
 		_run_dir = mv.normalized() if mv.length() > 0.3 else facing()
@@ -503,20 +542,113 @@ func _resolve_hit() -> void:
 		AudioDirector.play("whoosh", global_position + Vector3.UP * 1.4, -8.0)
 
 
+# ---------------------------------------------------------------- momentum, specials, parries
+
+func gain_momentum(amount: float) -> void:
+	if match_over or (amount > 0.0 and special_left > 0.0):
+		return
+	momentum = clampf(momentum + amount, 0.0, MOMENTUM_MAX)
+	if momentum >= MOMENTUM_MAX and special_left <= 0.0:
+		special_left = SPECIAL_TIME
+		AudioDirector.play("special_ready", global_position + Vector3.UP * 1.5, -2.0, 0.0)
+		special_ready.emit(self)
+	momentum_changed.emit(self)
+
+
+func has_special() -> bool:
+	return special_left > 0.0
+
+
+## Damage multiplier from momentum: up to +15% on a full meter.
+func damage_boost() -> float:
+	return 1.0 + 0.15 * momentum / MOMENTUM_MAX
+
+
+func finisher_name() -> String:
+	return String(Grapples.ALL[finisher].get("name", finisher)).to_upper()
+
+
+## A finisher can be hit straight onto a dazed opponent, or from a tie-up.
+func _finisher_ready_on(t: Wrestler) -> bool:
+	var d := _flat(t.global_position - global_position, Vector3.ZERO).length()
+	return t.can_be_grappled() and t.outside == outside and d < GRAB_RANGE + 0.15 \
+		and t.state in [State.STUN, State.HITSTUN, State.CORNERED, State.CORNER_EXIT]
+
+
+func _start_finisher(t: Wrestler) -> void:
+	special_left = 0.0
+	momentum = 0.0
+	momentum_changed.emit(self)
+	_start_paired(finisher, t)
+
+
+func _st_taunt(_delta: float) -> void:
+	velocity.x = _push.x
+	velocity.z = _push.z
+	if state_time >= _anim_length("taunt") - 0.02:
+		gain_momentum(15.0)    # playing to the crowd pays off, if you get away with it
+		_enter(State.IDLE)
+
+
+## A block press within `since` that wasn't part of a mash.
+func _timed_block(since: float) -> bool:
+	return _press_t >= since and _press_t - _press_prev > MASH_GUARD
+
+
+func _parry(attacker: Wrestler, from: Vector3) -> void:
+	_press_t = -99.0
+	_face(from, 0.0, true)
+	freeze(0.08)
+	attacker.freeze(0.08)
+	AudioDirector.play("parry", global_position + Vector3.UP * 1.4)
+	_push = Vector3.ZERO
+	_enter(State.PARRY)
+	attacker._stagger(from)
+	gain_momentum(8.0)
+	attacker.gain_momentum(-4.0)
+	reversed.emit(self, attacker, "parry")
+
+
+func _stagger(away: Vector3) -> void:
+	_push = away * 1.6
+	_combo_hits = 0
+	_enter(State.STUN)
+	_stun_len = 0.8
+
+
+func _st_parry(_delta: float) -> void:
+	velocity.x = _push.x
+	velocity.z = _push.z
+	if state_time > 0.12:
+		var action := _take_buffered()
+		if action != "" and _try_action(action):
+			return
+	if state_time >= _anim_length("parry") - 0.02:
+		_enter(State.IDLE)
+
+
 func receive_strike(attacker: Wrestler, mv: Dictionary) -> void:
 	var from := flat_dir_to(attacker)
 	var stop := float(mv.get("hitstop", 0.07))
+	if state in [State.IDLE, State.BLOCK] and facing().dot(from) > 0.3 and not mv.get("weapon", false) \
+			and _timed_block(_clock - PARRY_WINDOW):
+		_parry(attacker, from)
+		return
 	if state == State.BLOCK and facing().dot(from) > 0.3:
 		_push = -from * 2.0
 		freeze(0.05)
 		attacker.freeze(0.05)
 		AudioDirector.play("block", global_position + Vector3.UP * 1.3, -2.0)
+		gain_momentum(1.5)
 		struck.emit(attacker, self, mv, true)
 		return
 
 	var was_stunned := state == State.HITSTUN or state == State.STUN
 	var running_into := is_running() and facing().dot(from) > 0.3
-	_damage(float(mv["damage"]) * (1.3 if running_into else 1.0))
+	var dmg := float(mv["damage"]) * (1.3 if running_into else 1.0) * attacker.damage_boost()
+	_damage(dmg)
+	attacker.gain_momentum(dmg * 1.5)
+	gain_momentum(dmg * 0.35)
 	_combo_hits += 1
 	_combo_timer = 1.6
 	freeze(stop)
@@ -690,6 +822,8 @@ func _st_tieup(_delta: float) -> void:
 			_start_rope_toss(toss_normal)
 		else:
 			_start_paired("whip", partner)
+	elif c and c.taunt and has_special():
+		_start_finisher(partner)
 	elif action == "punch":
 		_start_paired("body_slam" if has_dir else "headbutt", partner)
 	elif action == "kick":
@@ -836,6 +970,9 @@ func _begin_paired(other: Wrestler, mv: Dictionary, anchor: Transform3D, role: S
 func _st_paired(_delta: float) -> void:
 	_hold_still()
 	if _role != "a":
+		if reversal_window() > 0.0 and _timed_block(_clock - state_time - 0.1):
+			_reverse_grapple()
+			return
 		# the attacker drives timing for both; this is only a safety net
 		if state_time > float(_pair.get("length", 2.0)) + 0.5:
 			_end_paired(_pair, "d", null) if not _pair.is_empty() else _go_down()
@@ -860,8 +997,46 @@ func _st_paired(_delta: float) -> void:
 		_finish_pair()
 
 
+## Seconds left to reverse the move being done to us (0 when it can't be reversed).
+func reversal_window() -> float:
+	if state != State.PAIRED or _role != "d" or partner == null or partner.state != State.PAIRED:
+		return 0.0
+	return maxf(0.0, float(_pair.get("reversal", 0.0)) - state_time)
+
+
+## Turn the tie-up around: back to where we stood, and throw them instead.
+func _reverse_grapple() -> void:
+	var att := partner
+	var id: String = _pair["id"]
+	_press_t = -99.0
+	var spot := att._anchor * Grapples.root_xform(_root_info("tieup_d", "root_end"), model_scale())
+	att._pair = {}
+	att.partner = null
+	_pair = {}
+	partner = null
+	global_transform = spot
+	if id == "whip":
+		_whip_dir = facing()
+		_start_paired("whip", att)
+	else:
+		_start_paired("hip_toss", att)
+	AudioDirector.play("parry", body_center(), 2.0)
+	gain_momentum(12.0)
+	att.gain_momentum(-6.0)
+	reversed.emit(self, att, "reversal")
+
+
 func _take_move_damage(attacker: Wrestler, mv: Dictionary) -> void:
-	_damage(float(mv["damage"]))
+	var dmg := float(mv["damage"]) * attacker.damage_boost()
+	_damage(dmg)
+	if mv.get("finisher", false):
+		_finisher_hit = 10.0
+	else:
+		attacker.gain_momentum(dmg * 1.6)
+	gain_momentum(dmg * 0.35)
+	if dmg >= 9.0:
+		freeze(0.06)
+		attacker.freeze(0.06)
 	var land := attacker._anchor * Grapples.root_xform(mv["root_end_d"], model_scale())
 	if Ring.is_outside(land.origin):
 		landed_outside.emit(self, land.origin - land.basis.z * 0.35 * model_scale())
@@ -890,7 +1065,7 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 	match end:
 		"idle": _enter(State.IDLE, blend)
 		"getup": _enter(State.GETUP, 0.0)
-		"down": _go_down(0.4)
+		"down": _go_down(0.4 + float(mv.get("down_extra", 0.0)))
 		"stun": _enter(State.STUN, blend)
 		"tieup":
 			_lock(other, _anchor * Grapples.root_xform(end_info, model_scale()), State.TIEUP, "tieup_a")
@@ -905,6 +1080,8 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 			_set_solid(false)
 			_kickout_have = 0
 			_kickout_need = int(2 + pow(1.0 - health / MAX_HEALTH, 1.8) * 18.0 + (16.0 if health <= 0.0 else 0.0))
+			if _finisher_hit > 0.0:
+				_kickout_need = int(_kickout_need * 1.6) + 6
 			_enter(State.PINNED, 0.0)
 			if other:
 				other.pin_started.emit(other, self)
@@ -1021,7 +1198,9 @@ func _st_stomp(_delta: float) -> void:
 
 
 func receive_ground_hit(attacker: Wrestler, dmg: float) -> void:
+	dmg *= attacker.damage_boost()
 	_damage(dmg)
+	attacker.gain_momentum(dmg * 1.2)
 	AudioDirector.play("hit_heavy", body_center(), -2.0)
 	struck.emit(attacker, self, {"id": "stomp", "damage": dmg}, false)
 	_down_left += 0.35
@@ -1054,6 +1233,7 @@ func kick_out() -> void:
 	partner = null
 	_set_solid(true)
 	_down_left = 0.8
+	gain_momentum(6.0)
 	_enter(State.KICKOUT)
 	if p and p.state == State.PINNING:
 		p.partner = null

@@ -1,7 +1,7 @@
 extends Node
 ## Global session state: the match being set up from the menus.
 
-const DIFFICULTIES := ["Dummy", "Easy", "Normal", "Hard"]
+const DIFFICULTIES := ["Dummy", "Easy", "Normal", "Hard", "Legend"]
 const RULES := {"normal": "Normal (count-out, DQ)", "nodq": "No DQ (anything goes)"}
 
 var rules := "normal"

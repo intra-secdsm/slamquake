@@ -1,7 +1,7 @@
 class_name MatchHud
 extends CanvasLayer
-## 90s arcade style HUD: slanted neon health bars with names, a banner for big
-## moments, and a controls overlay (F1).
+## 90s arcade style HUD: slanted neon health bars with momentum meters and names,
+## a banner for big moments, popups, a screen flash, and a controls overlay (F1).
 
 const BAR_W := 520.0
 const BAR_H := 30.0
@@ -16,6 +16,9 @@ var _kick_box: Control
 var _kick_fill: ColorRect
 var _kick_label: Label
 var _count_label: Label
+var _popups: Array[Dictionary] = []
+var _flash: ColorRect
+var _time := 0.0
 
 
 func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
@@ -26,6 +29,7 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 	for i in wrestlers.size():
 		_add_bar(wrestlers[i], i)
 		wrestlers[i].health_changed.connect(_on_health)
+		wrestlers[i].momentum_changed.connect(_on_momentum)
 
 	_banner = Label.new()
 	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -50,6 +54,12 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 	_count_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_count_label.add_theme_constant_override("outline_size", 10)
 	_root.add_child(_count_label)
+
+	_flash = ColorRect.new()
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_flash)
 
 	_help = Label.new()
 	_help.text = help_text + "\n\nF1: hide controls    Esc / Start: pause"
@@ -111,12 +121,55 @@ func banner(text: String, seconds: float = 1.6) -> void:
 	_banner.pivot_offset = _banner.size / 2
 
 
+## Short callout next to a wrestler's health bar ("PARRY!", "SPECIAL!").
+func popup(text: String, w: Wrestler) -> void:
+	if not _bars.has(w):
+		return
+	var bar: Dictionary = _bars[w]
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 40)
+	l.add_theme_color_override("font_color", Color.WHITE)
+	l.add_theme_color_override("font_outline_color", bar["color"])
+	l.add_theme_constant_override("outline_size", 12)
+	var holder: Control = bar["holder"]
+	l.position = Vector2(BAR_W - 260 if bar["right"] else 10, BAR_H + 46)
+	l.size = Vector2(250, 50)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if bar["right"] else HORIZONTAL_ALIGNMENT_LEFT
+	holder.add_child(l)
+	_popups.append({"label": l, "t": 1.1})
+
+
+func flash() -> void:
+	_flash.color.a = 0.85
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F1:
 		_help.visible = not _help.visible
 
 
 func _process(delta: float) -> void:
+	_time += delta
+	_flash.color.a = move_toward(_flash.color.a, 0.0, delta * 2.5)
+	for p in _popups.duplicate():
+		p["t"] -= delta
+		var l: Label = p["label"]
+		l.position.y += delta * 24.0
+		l.modulate.a = clampf(p["t"] / 0.3, 0.0, 1.0)
+		if p["t"] <= 0.0:
+			l.queue_free()
+			_popups.erase(p)
+	for w: Wrestler in _bars:
+		var bar: Dictionary = _bars[w]
+		var tag: Label = bar["special"]
+		tag.visible = w.has_special()
+		if tag.visible:
+			tag.modulate.a = 0.6 + 0.4 * sin(_time * 12.0)
+			var mfill: ColorRect = bar["mfill"]
+			mfill.color = Color.WHITE.lerp(bar["color"], 0.5 + 0.5 * sin(_time * 12.0))
+			mfill.size.x = float(bar["mfull"]) * w.special_left / Wrestler.SPECIAL_TIME
+			mfill.position.x = float(bar["mx"]) + (float(bar["mfull"]) - mfill.size.x if bar["right"] else 0.0)
 	if _banner_time > 0.0:
 		_banner_time -= delta
 		_banner.scale = _banner.scale.lerp(Vector2.ONE, delta * 12.0)
@@ -134,7 +187,7 @@ func _process(delta: float) -> void:
 func _add_bar(w: Wrestler, i: int) -> void:
 	var right := i % 2 == 1
 	var holder := Control.new()
-	holder.position = Vector2(40 if not right else 0, 36 + (i / 2) * 78)
+	holder.position = Vector2(40 if not right else 0, 36 + (i / 2) * 90)
 	if right:
 		holder.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 		holder.position.x = -BAR_W - 40
@@ -161,9 +214,31 @@ func _add_bar(w: Wrestler, i: int) -> void:
 	fill.size = lag.size
 	holder.add_child(fill)
 
+	var mbg := ColorRect.new()
+	mbg.color = Color(0, 0, 0, 0.65)
+	mbg.position = Vector2(6, BAR_H + 3)
+	mbg.size = Vector2(BAR_W * 0.6, 9)
+	if right:
+		mbg.position.x = BAR_W - 6 - mbg.size.x
+	holder.add_child(mbg)
+	var mfill := ColorRect.new()
+	mfill.color = COLORS[i].lerp(Color.WHITE, 0.35)
+	mfill.position = mbg.position + Vector2(1, 1)
+	mfill.size = Vector2(0, 7)
+	holder.add_child(mfill)
+	var special := Label.new()
+	special.text = "SPECIAL"
+	special.visible = false
+	special.add_theme_font_size_override("font_size", 18)
+	special.add_theme_color_override("font_color", Color("ffd400"))
+	special.add_theme_color_override("font_outline_color", Color.BLACK)
+	special.add_theme_constant_override("outline_size", 6)
+	special.position = Vector2(mbg.position.x + mbg.size.x + 8 if not right else mbg.position.x - 96, BAR_H - 4)
+	holder.add_child(special)
+
 	var name_label := Label.new()
 	name_label.text = w.display_name.to_upper()
-	name_label.position = Vector2(4, BAR_H + 2)
+	name_label.position = Vector2(4, BAR_H + 12)
 	name_label.size = Vector2(BAR_W, 30)
 	if right:
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -172,7 +247,8 @@ func _add_bar(w: Wrestler, i: int) -> void:
 	name_label.add_theme_color_override("font_outline_color", COLORS[i])
 	name_label.add_theme_constant_override("outline_size", 6)
 	holder.add_child(name_label)
-	_bars[w] = {"fill": fill, "lag": lag, "right": right, "full": BAR_W - 12}
+	_bars[w] = {"fill": fill, "lag": lag, "right": right, "full": BAR_W - 12, "holder": holder, "color": COLORS[i],
+		"mfill": mfill, "mfull": mbg.size.x - 2, "mx": mbg.position.x + 1, "special": special}
 
 
 func _on_health(w: Wrestler) -> void:
@@ -182,3 +258,11 @@ func _on_health(w: Wrestler) -> void:
 	fill.size.x = full * w.health / Wrestler.MAX_HEALTH
 	if bar["right"]:
 		fill.position.x = 6 + full - fill.size.x
+
+
+func _on_momentum(w: Wrestler) -> void:
+	var bar: Dictionary = _bars[w]
+	var mfill: ColorRect = bar["mfill"]
+	mfill.color = (bar["color"] as Color).lerp(Color.WHITE, 0.35)
+	mfill.size.x = float(bar["mfull"]) * w.momentum / Wrestler.MOMENTUM_MAX
+	mfill.position.x = float(bar["mx"]) + (float(bar["mfull"]) - mfill.size.x if bar["right"] else 0.0)

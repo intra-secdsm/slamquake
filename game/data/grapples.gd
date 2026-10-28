@@ -5,20 +5,30 @@ class_name Grapples
 ##   align: "defender" (default) moves the defender onto the attacker's anchor;
 ##          "attacker" moves the attacker so a downed defender stays where they lie
 ##   in_place: never slide the pair inward (so pins under the ropes still break)
+##   reversal: seconds after the move starts in which the defender can reverse it (block)
+##   finisher: needs a SPECIAL; cinematic camera, no momentum, harder kick-outs
 
 const ALL := {
-	"headbutt": {"damage": 6.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_light"},
-	"body_slam": {"damage": 10.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
-	"suplex": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
-	"ddt": {"damage": 15.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
+	"headbutt": {"damage": 6.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_light", "reversal": 0.25},
+	"body_slam": {"damage": 10.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"suplex": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"ddt": {"damage": 15.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
 	"german": {"damage": 16.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
 	"back_body_drop": {"damage": 11.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
-	"whip": {"damage": 0.0, "end_a": "idle", "end_d": "whipped"},
+	"whip": {"damage": 0.0, "end_a": "idle", "end_d": "whipped", "reversal": 0.18},
 	"rope_toss": {"damage": 12.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall", "in_place": true},
 	"pickup": {"damage": 0.0, "end_a": "tieup", "end_d": "held", "align": "attacker"},
 	"cover": {"damage": 0.0, "end_a": "pinning", "end_d": "pinned", "align": "attacker", "in_place": true},
 	"elbow_drop": {"damage": 9.0, "end_a": "idle", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
 		"in_place": true},
+	"hip_toss": {"damage": 7.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
+	# finishers (one per roster wrestler for now; CAW picks from these in M8)
+	"thunder_bomb": {"name": "Thunder Bomb", "damage": 32.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"volt_shock": {"name": "Volt Shock", "damage": 30.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"iron_drop": {"name": "Iron Drop", "damage": 32.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
 }
 
 
