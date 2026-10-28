@@ -22,10 +22,10 @@ const PROFILES := [
 ## and "power" (tie-up power moves over strikes).
 const STYLES := {
 	"brawler": {"heavy": 1.4, "grapple": 0.85, "chair": 2.5, "climb": 0.7},
-	"highflyer": {"run": 2.2, "climb": 2.5, "grapple": 0.85, "power": 0.7},
+	"highflyer": {"run": 1.3, "climb": 2.5, "power": 0.7},
 	"powerhouse": {"grapple": 1.35, "run": 0.4, "power": 1.6, "climb": 0.4},
-	"technician": {"grapple": 1.3, "reverse": 1.3, "parry": 1.3, "taunt": 0.6},
-	"showman": {"taunt": 2.5, "run": 1.4},
+	"technician": {"grapple": 1.3, "reverse": 1.15, "parry": 1.15, "taunt": 0.6},
+	"showman": {"taunt": 2.5, "run": 1.1},
 }
 
 var difficulty: int
@@ -207,8 +207,10 @@ func _environment(w: Wrestler, target: Wrestler, dist: float, dir: Vector3, delt
 		if target.outside != w.outside:
 			move = _toward_ring(w) if w.outside else _toward_floor(w, target)
 		else:
-			move = dir if dist > 1.2 else Vector3.ZERO
-			punch = dist <= 1.3 and target.can_be_hit() and _think <= 0.0
+			# square up first: a swing at someone beside or behind us only hits air
+			var squared := w.facing().dot(dir) > 0.7
+			move = dir if dist > 1.2 or not squared else Vector3.ZERO
+			punch = dist <= 1.3 and squared and target.can_be_hit() and _think <= 0.0
 			if punch:
 				_think = profile["reaction"]
 		return true
@@ -258,8 +260,13 @@ func _environment(w: Wrestler, target: Wrestler, dist: float, dir: Vector3, delt
 		_climb_think -= delta
 		if _climb_corner < 0 and _climb_think <= 0.0:
 			_climb_think = 1.0
-			if _rng.randf() < 0.12 * (1.0 + difficulty * 0.3) * float(_mods.get("climb", 1.0)):
-				_climb_corner = _corner_near(target.body_center(), 3.6)
+			if _rng.randf() < 0.12 * (1.0 + difficulty * 0.3) * float(_mods.get("climb", 1.0)) and target.health > 35.0:
+				# only if they'll still be down by the time we're up top (and not ready to pin)
+				var c := _corner_near(target.body_center(), 3.6)
+				if c >= 0:
+					var walk := (w._corner_spot(c) - w.global_position).length() / Wrestler.WALK_SPEED
+					if target.down_time_left() > walk + w._anim_length("climb_corner") + profile["reaction"] + 0.6:
+						_climb_corner = c
 		if _climb_corner >= 0:
 			var spot := w._corner_spot(_climb_corner)
 			var to_spot := spot - w.global_position
@@ -315,37 +322,7 @@ func _corner_near(p: Vector3, radius: float) -> int:
 
 ## Walk toward the nearest side of the ring (away from the corners) to climb back in.
 func _toward_ring(w: Wrestler) -> Vector3:
-	var p := w.global_position
-	var axis := 0 if absf(p.x) > absf(p.z) else 2
-	var other := 2 - axis
-	var v := Vector3.ZERO
-	v[axis] = -signf(p[axis])
-	# aim for the middle of a side (the steel steps sit near the corners), or if the table
-	# stands there, for the gap past its far end from the steps
-	var aim := 0.0
-	var window := 1.2
-	if axis == 0 and _table_on_side(w, signf(p.x)):
-		aim = -signf(p.x) * 1.8
-		window = 0.4
-	if absf(p[other] - aim) > window:
-		v[other] = -signf(p[other] - aim)
-		if absf(p[axis]) < Ring.canvas_half() + 1.5:
-			v[axis] = signf(p[axis]) * 0.4      # step back out around the steps / table
-		else:
-			v[axis] *= 0.2
-	return v.normalized()
-
-
-## True if an unbroken table stands at ringside on the +x (1) or -x (-1) side. The steel
-## steps are at that side's +z end on +x and -z end on -x, so the free gap is at the other end.
-func _table_on_side(w: Wrestler, side: float) -> bool:
-	var m := w.get_parent() as Match
-	if m == null:
-		return false
-	for t: FoldingTable in m.tables:
-		if t.intact and signf(t.global_position.x) == side and absf(t.global_position.x) > Ring.canvas_half():
-			return true
-	return false
+	return w.route_into_ring()
 
 
 ## Head out to the floor on the side nearest the opponent.
@@ -372,7 +349,7 @@ func _defend_grapple(w: Wrestler) -> void:
 		return
 	if not _rev_rolled:
 		_rev_rolled = true
-		_rev_ok = _rng.randf() < profile["reverse"]
+		_rev_ok = _rng.randf() < profile["reverse"] * Stats.reversal(w.stats)
 		_rev_at = _rng.randf_range(0.04, 0.14)
 	if _rev_ok and w.state_time >= _rev_at:
 		block_pressed = true

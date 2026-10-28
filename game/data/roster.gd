@@ -83,7 +83,7 @@ static func builtin() -> Array[Dictionary]:
 					"dive_kick": "dive_splash", "taunt": "taunt_roar", "finisher": "iron_drop"}},
 			{"id": "quetzal_neon", "style": "highflyer", "name": "Quetzal Neón", "look": _quetzal(), "theme": "theme_quetzal",
 				"color": Color("3dff6e"), "tagline": "THE EMERALD WINGS OF LUCHA", "pyro": "fireworks", "motif": "feathers",
-				"stats": {"power": 2, "speed": 4, "toughness": 2, "charisma": 4},
+				"stats": {"power": 2, "speed": 4, "toughness": 3, "charisma": 3},
 				"moves": {"kick": "dropkick", "running": "crossbody", "tieup_punch": "chop",
 					"tieup_punch_dir": "arm_drag", "tieup_kick": "snap_suplex", "tieup_kick_dir": "ddt",
 					"back_grapple": "back_suplex", "ground_punch": "leg_drop", "dive_punch": "dive_moonsault",

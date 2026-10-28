@@ -201,3 +201,42 @@ func test_two_wrestlers_on_one_corner_spot_stay_on_the_canvas() -> void:
 		await wait_physics_frames(1)
 		assert_gt(a.global_position.y, Ring.canvas_height() - 0.1)
 		assert_gt(b.global_position.y, Ring.canvas_height() - 0.1)
+
+
+func test_thrown_over_the_top_lands_inside_the_barricade() -> void:
+	# a big throw right by the barricade once left its victim inside the wall
+	var mv := Grapples.get_move("quetzal_rana")
+	var wall := float(Ring.spec()["barricade_half"])
+	for turn in [0.0, PI / 2, PI, -PI / 2]:
+		b._anchor = Transform3D(Basis(Vector3.UP, turn), Vector3(0, 0.0, wall - 0.5))
+		b._end_paired(mv, "d", a)
+		assert_true(b.outside)
+		assert_lt(absf(b.global_position.z), wall - 0.3, "this side of the barricade (turned %.1f)" % turn)
+		assert_lt(absf(b.global_position.x), wall - 0.3)
+
+
+func test_cpu_with_a_chair_squares_up_before_swinging() -> void:
+	# swinging at someone beside you only hits air; a CPU once did that forever
+	GameState.rules = "nodq"
+	var chair := m.chairs[0]
+	_place(a, chair.global_position + Vector3(0.6, 0, 0), Vector3.LEFT)
+	_place(b, chair.global_position + Vector3(1.6, 0, 0), Vector3.LEFT)
+	a.outside = true
+	b.outside = true
+	await wait_physics_frames(10)
+	ca.press = "grapple"
+	assert_true(await _wait_until(func() -> bool: return a.held_item != null, 60), "picked up the chair")
+	await _wait_until(func() -> bool: return a.state == S.IDLE, 60)
+	b.global_position = a.global_position + a.facing().rotated(Vector3.UP, PI / 2) * 0.9   # right beside
+	var hp := b.health
+	a.controller = CpuController.new(3, 1)
+	assert_true(await _wait_until(func() -> bool: return b.health < hp, 240), "the chair connected")
+
+
+func test_route_back_in_steps_round_the_steel_steps() -> void:
+	# an illegal partner sent back to the apron once walked onto the steps and stuck there
+	for start in [Vector3(-4.3, 0, -2.3), Vector3(4.3, 0, 2.3)]:
+		_place(a, start, Vector3.FORWARD)
+		var v := a.route_into_ring()
+		assert_eq(signf(v.z), -signf(start.z), "from %s, along the side away from the steps (%s)" % [start, v])
+		assert_gt(absf(v.z), 0.8)
