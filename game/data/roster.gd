@@ -154,6 +154,8 @@ static func _zip_volta() -> WrestlerLook:
 	l.pads_color = Color(0.1, 0.8, 0.9)
 	l.tights = true
 	l.tights_color = Color(0.1, 0.12, 0.35)
+	l.pattern = "bolt"
+	l.pattern_color = Color(0.1, 0.9, 1.0)
 	l.boots_color = Color(0.9, 0.9, 0.95)
 	return l
 
@@ -173,7 +175,6 @@ static func _bruno() -> WrestlerLook:
 	return l
 
 
-# Placeholder looks for the M8 wrestlers; the final looks use the new attire options.
 
 static func _quetzal() -> WrestlerLook:
 	var l := WrestlerLook.new()
@@ -230,6 +231,7 @@ static func _kai() -> WrestlerLook:
 	l.pattern_color = Color("1fb5ff")
 	l.boots = false
 	l.kneepads = false
+	l.pads_color = Color("1fb5ff")
 	l.tattoo = "armband"
 	return l
 

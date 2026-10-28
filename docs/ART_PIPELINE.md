@@ -10,6 +10,9 @@ tools/build_assets.sh arena           # seating, stage, titantron, ramp, truss (
 python3 tools/synth_sfx.py            # sound effects
 tools/synth_music.sh                  # music and crowd loops (Blender's Python, for numpy)
 tools/screenshot.sh res://match/showcase.tscn /tmp/shot.png 30 --cam=face
+tools/move_sheet.sh /tmp/m.png piledriver 0.3,0.8,1.2   # a move in a real match, frozen at those times
+tools/pose_sheet.sh /tmp/p.png side pair:piledriver@0.8  # isolated poses, no ring
+tools/screenshot.sh res://dev/look_lineup.tscn /tmp/l.png 20 --looks='nova_reyes|default;mask=wings' --cam=head
 ```
 
 `build_assets.sh` runs each target in a fresh Blender process with a fixed hash seed. It
