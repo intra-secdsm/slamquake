@@ -746,7 +746,7 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 			partner = other
 			_set_solid(false)
 			_kickout_have = 0
-			_kickout_need = int(2 + pow(1.0 - health / MAX_HEALTH, 1.5) * 26.0 + (18.0 if health <= 0.0 else 0.0))
+			_kickout_need = int(2 + pow(1.0 - health / MAX_HEALTH, 1.8) * 18.0 + (16.0 if health <= 0.0 else 0.0))
 			_enter(State.PINNED, 0.0)
 			if other:
 				other.pin_started.emit(other, self)
