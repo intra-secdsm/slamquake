@@ -51,6 +51,11 @@ func _ready() -> void:
 	apply_look()
 
 
+## Edge glow strength (0 = off), e.g. while a SPECIAL is banked.
+func set_aura(amount: float) -> void:
+	_body_mat.set_shader_parameter("aura", amount)
+
+
 func apply_look() -> void:
 	var l := look
 	_model.scale = Vector3.ONE * l.height

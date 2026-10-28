@@ -1,6 +1,6 @@
 extends Node
 ## Dev tool: stage environment situations for screenshots.
-##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=chair|perch|table|outside|dive
+##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=chair|perch|table|outside|dive|finisher|reversal [--move=iron_drop]
 
 class Hold:
 	extends WrestlerController
@@ -16,6 +16,8 @@ class Hold:
 			"punch": punch = true
 			"kick": kick = true
 			"grapple": grapple = true
+			"taunt": taunt = true
+			"block": block_pressed = true
 		press = ""
 
 var m: Match
@@ -88,6 +90,20 @@ func _ready() -> void:
 			await get_tree().create_timer(0.2).timeout
 			ca.hold_move = Vector3.RIGHT
 			ca.hold_run = true
+		"finisher", "reversal":
+			a.global_position = Vector3(-0.4, y, 0.3)
+			b.global_position = Vector3(0.4, y, 0.3)
+			a.rotation.y = PI / 2
+			b.rotation.y = -PI / 2
+			a.finisher = DevTools.get_arg("move", "thunder_bomb")
+			a.gain_momentum(Wrestler.MOMENTUM_MAX)
+			await get_tree().physics_frame
+			ca.press = "grapple"
+			await get_tree().create_timer(0.3).timeout
+			ca.press = "taunt"
+			if DevTools.get_arg("setup") == "reversal":
+				await get_tree().create_timer(0.08).timeout
+				(b.controller as Hold).press = "block"
 		"outside":
 			a.global_position = Vector3(-1.0, y, lim - 0.2)
 			a.rotation.y = 0

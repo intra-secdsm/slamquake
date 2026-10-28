@@ -1,12 +1,53 @@
 class_name HitFx
 extends Node3D
-## One-shot impact burst: a flash plus a spray of sweat droplets. Frees itself.
+## One-shot impact effects that free themselves: a strike burst (flash plus sweat
+## spray) and a dust ring for bodies hitting the canvas.
 
 static func spawn(parent: Node, at: Vector3, heavy: bool) -> void:
 	var fx := HitFx.new()
 	parent.add_child(fx)
 	fx.global_position = at
 	fx._build(heavy)
+
+
+static func dust(parent: Node, at: Vector3) -> void:
+	var fx := HitFx.new()
+	parent.add_child(fx)
+	fx.global_position = at
+	var puff := CPUParticles3D.new()
+	puff.one_shot = true
+	puff.explosiveness = 0.95
+	puff.amount = 28
+	puff.lifetime = 0.7
+	puff.direction = Vector3.UP
+	puff.spread = 85.0
+	puff.flatness = 0.7
+	puff.initial_velocity_min = 0.8
+	puff.initial_velocity_max = 2.2
+	puff.gravity = Vector3(0, -1.5, 0)
+	puff.damping_min = 2.0
+	puff.damping_max = 3.0
+	puff.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	puff.emission_sphere_radius = 0.35
+	puff.scale_amount_min = 0.6
+	puff.scale_amount_max = 1.4
+	var curve := Curve.new()
+	curve.add_point(Vector2(0, 0.4))
+	curve.add_point(Vector2(0.3, 1.0))
+	curve.add_point(Vector2(1, 0.0))
+	puff.scale_amount_curve = curve
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(0.14, 0.14)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.95, 0.93, 0.9, 0.35)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mesh.material = mat
+	puff.mesh = mesh
+	fx.add_child(puff)
+	puff.emitting = true
+	fx.get_tree().create_timer(0.9).timeout.connect(fx.queue_free)
 
 
 func _build(heavy: bool) -> void:

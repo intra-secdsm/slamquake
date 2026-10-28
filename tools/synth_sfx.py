@@ -115,6 +115,70 @@ def crash(length, seed):
     return render(length, fn, seed)
 
 
+class Resonator:
+    """Two-pole band-pass: gives filtered noise a vowel-like formant."""
+    def __init__(self, freq, r):
+        self.c1 = 2 * r * math.cos(2 * math.pi * freq / RATE)
+        self.c2 = -r * r
+        self.y1 = self.y2 = 0.0
+
+    def __call__(self, x):
+        y = x * 0.05 + self.c1 * self.y1 + self.c2 * self.y2
+        self.y2, self.y1 = self.y1, y
+        return y
+
+
+def crowd(length, seed, rise, hold, formants, claps=0):
+    """A crowd reaction: many voices as formant-filtered noise, swelling and fading."""
+    res = [Resonator(f, 0.985) for f in formants]
+    lp = Lowpass(3000)
+    rnd0 = random.Random(seed)
+    clap_t = sorted(rnd0.uniform(0.1, length * 0.8) for _ in range(claps))
+    wob = [rnd0.uniform(0, 6.28) for _ in range(4)]
+
+    def fn(t, rnd):
+        a = min(1.0, t / rise) if t < rise + hold else math.exp(-(t - rise - hold) / (length * 0.25))
+        flutter = 1 + 0.15 * sum(math.sin(2 * math.pi * (3 + k * 1.7) * t + wob[k]) for k in range(4)) / 4
+        n = rnd.uniform(-1, 1)
+        voice = sum(r(n) for r in res) + lp(n) * 0.25
+        c = 0.0
+        for ct in clap_t:
+            if 0 <= t - ct < 0.02:
+                c += rnd.uniform(-1, 1) * math.exp(-(t - ct) / 0.004) * 0.5
+        return (voice * flutter + c) * a
+    return render(length, fn, seed)
+
+
+def zap(length, seed):
+    """Special ready: a bright rising arpeggio with a shimmer."""
+    notes = [440, 554, 659, 880, 1109]
+
+    def fn(t, rnd):
+        i = min(len(notes) - 1, int(t / (length * 0.12)))
+        f = notes[i] * (1 + 0.004 * math.sin(2 * math.pi * 7 * t))
+        sq = 1.0 if (t * f) % 1.0 < 0.5 else -1.0
+        shimmer = math.sin(2 * math.pi * f * 2.01 * t) * 0.4
+        return (sq * 0.35 + shimmer) * env(t, 0.005, length * 0.45)
+    return render(length, fn, seed)
+
+
+def parry(length, seed):
+    """Reversal/parry: a sharp slap with a short metallic ping."""
+    slap = thump(420, 260, length, 5000, 0.6, seed, click=1.0)
+    return [x + 0.6 * math.sin(2 * math.pi * 1760 * i / RATE) * env(i / RATE, 0.001, 0.05)
+            for i, x in enumerate(slap)]
+
+
+def boom(length, seed):
+    """Finisher impact: a big body slam over a deep sub boom."""
+    body = thump(85, 38, length, 800, 1.0, seed, click=0.4)
+    out = []
+    for i, x in enumerate(body):
+        t = i / RATE
+        out.append(x + 1.2 * math.sin(2 * math.pi * (32 + 30 * math.exp(-t / 0.08)) * t) * env(t, 0.003, 0.35))
+    return out
+
+
 def triple(samples, gap):
     out = [0.0] * (len(samples) + 2 * int(gap * RATE))
     for k in range(3):
@@ -152,6 +216,11 @@ SOUNDS = {
     "chair_hit": lambda: clang(0.5, 10),
     "table_crash": lambda: crash(0.9, 11),
     "bell_triple": lambda: triple(bell(1.4, 9), 0.32),
+    "special_ready": lambda: zap(0.7, 12),
+    "parry": lambda: parry(0.18, 13),
+    "finisher_impact": lambda: boom(1.1, 14),
+    "crowd_pop": lambda: crowd(3.2, 15, 0.25, 0.9, (480, 820, 1350), claps=40),
+    "crowd_ooh": lambda: crowd(1.6, 16, 0.2, 0.3, (420, 760)),
 }
 
 if __name__ == "__main__":

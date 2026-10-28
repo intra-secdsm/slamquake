@@ -24,6 +24,8 @@ uniform float shirt = 0.0;
 uniform float stripes = 0.0;   // vertical stripes around the shirt (0 = plain)
 uniform float skin_roughness = 0.42;
 uniform float rim_strength = 0.35;
+uniform vec3 aura_color : source_color = vec3(1.0, 0.78, 0.15);
+uniform float aura = 0.0;      // SPECIAL banked: glowing edges
 
 varying vec3 rest;       // rest position: x = own left, y = back, z = up (metres)
 varying float limb_t;    // 0..1 along arm or leg chain
@@ -104,4 +106,6 @@ void fragment() {
 	SSS_STRENGTH = sss;
 	RIM = rim_strength;
 	RIM_TINT = 0.6;
+	float edge = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
+	EMISSION = aura_color * aura * (edge * 6.0 + 0.15);
 }

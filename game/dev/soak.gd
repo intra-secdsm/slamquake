@@ -11,7 +11,7 @@ const STUCK_LIMIT := {  # max seconds allowed in one state
 	S.CORNER_EXIT: 1.5, S.STOMP: 1.5, S.DOWN_HIT: 1.5, S.PINNING: 6.0, S.PINNED: 6.0,
 	S.KICKOUT: 1.5, S.COVER_RELEASE: 1.5, S.STUN: 2.0,
 	S.EXIT_RING: 2.0, S.ENTER_RING: 2.0, S.FALL_OUT: 2.0, S.CLIMB: 2.0, S.PERCH: 7.0, S.CLIMB_DOWN: 1.5,
-	S.DIVE: 1.5, S.DIVE_LAND: 1.5, S.ITEM_PICKUP: 1.5, S.CHAIR_SWING: 1.5,
+	S.DIVE: 1.5, S.DIVE_LAND: 1.5, S.ITEM_PICKUP: 1.5, S.CHAIR_SWING: 1.5, S.PARRY: 1.0,
 }
 
 var _match: Match
@@ -19,7 +19,7 @@ var _elapsed := 0.0
 var _match_time := 0.0
 var _limit := 120.0
 var _stats := {"matches": 0, "hits": 0, "blocks": 0, "knockdowns": 0, "rebounds": 0, "pins": 0, "kickouts": 0,
-	"exits": 0, "tables": 0}
+	"exits": 0, "tables": 0, "parries": 0, "reversals": 0, "specials": 0}
 var _endings := {}
 var _moves := {}
 var _durations: Array[float] = []
@@ -41,7 +41,7 @@ func _new_match() -> void:
 		_match.queue_free()
 	GameState.match_entrants = [
 		{"roster": randi_range(0, 2), "control": "cpu", "slot": 0, "difficulty": 3},
-		{"roster": randi_range(0, 2), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 3)},
+		{"roster": randi_range(0, 2), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4)},
 	]
 	GameState.rules = "nodq" if randf() < 0.4 else "normal"
 	_match = load("res://match/match.tscn").instantiate()
@@ -64,6 +64,9 @@ func _new_match() -> void:
 		w.move_performed.connect(func(_a: Wrestler, id: String) -> void:
 			_moves[id] = _moves.get(id, 0) + 1
 			_last_move = id)
+		w.reversed.connect(func(_b: Wrestler, _v: Wrestler, kind: String) -> void:
+			_stats["parries" if kind == "parry" else "reversals"] += 1)
+		w.special_ready.connect(func(_w: Wrestler) -> void: _stats["specials"] += 1)
 		_was_rebound[w] = false
 		w.landed_outside.connect(func(_v: Wrestler, _at: Vector3) -> void: _stats["exits"] += 1)
 	for t in _match.tables:

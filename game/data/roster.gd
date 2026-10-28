@@ -4,9 +4,9 @@ class_name Roster
 
 static func all() -> Array[Dictionary]:
 	return [
-		{"name": "Thunder Mack", "look": _thunder_mack()},
-		{"name": "Zip Volta", "look": _zip_volta()},
-		{"name": "Bruno Kessler", "look": _bruno()},
+		{"name": "Thunder Mack", "look": _thunder_mack(), "finisher": "thunder_bomb"},
+		{"name": "Zip Volta", "look": _zip_volta(), "finisher": "volt_shock"},
+		{"name": "Bruno Kessler", "look": _bruno(), "finisher": "iron_drop"},
 	]
 
 

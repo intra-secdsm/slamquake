@@ -1,7 +1,8 @@
 class_name BroadcastCamera
 extends Camera3D
 ## Hard-cam style camera: looks across the ring from the +Z side, keeps every
-## tracked wrestler framed, eases smoothly, and can shake on big impacts.
+## tracked wrestler framed, eases smoothly, and can shake on big impacts. For
+## finishers it cuts to a low, slowly orbiting close-up of the pair.
 
 @export var height := 1.45
 @export var base_distance := 4.4
@@ -13,11 +14,36 @@ var _focus := Vector3(0, 2.0, 0)
 var _distance := 8.0
 var _shake := 0.0
 var _rng := RandomNumberGenerator.new()
+var _cine: Array = []
+var _cine_left := 0.0
+var _cine_angle := 0.0
+var _cine_blend := 0.0
 
 
 func _ready() -> void:
 	fov = 42.0
 	_snap()
+
+
+## Close-up on `subjects` for `seconds`, viewed side-on to `facing` (from the hard-cam side).
+func cinematic(subjects: Array, facing: Vector3, seconds: float) -> void:
+	_cine = subjects.filter(func(n: Variant) -> bool: return n is Node3D)
+	if _cine.is_empty():
+		return
+	var side := facing.cross(Vector3.UP)
+	if side.z < 0.0:
+		side = -side
+	_cine_angle = atan2(side.x, side.z) + 0.35
+	_cine_left = seconds
+	_cine_blend = 0.0
+
+
+func in_cinematic() -> bool:
+	return _cine_left > 0.0
+
+
+func end_cinematic() -> void:
+	_cine_left = 0.0
 
 
 func shake(amount: float) -> void:
@@ -30,6 +56,14 @@ func _snap() -> void:
 
 func _process(delta: float) -> void:
 	_update(clampf(delta * follow_speed, 0.0, 1.0))
+	if _cine_left > 0.0:
+		_cine_left -= delta
+		_cine_blend = minf(1.0, _cine_blend + delta * 6.0)
+		_cine_angle += delta * 0.35
+	else:
+		_cine_blend = maxf(0.0, _cine_blend - delta * 2.5)
+	if _cine_blend > 0.0:
+		_apply_cinematic()
 	if _shake > 0.0:
 		h_offset = _rng.randf_range(-1, 1) * _shake * 0.08
 		v_offset = _rng.randf_range(-1, 1) * _shake * 0.08
@@ -55,3 +89,33 @@ func _update(t: float) -> void:
 	_distance = lerpf(_distance, want_distance, t)
 	var pos := _focus + Vector3(0, height + _distance * 0.1, _distance)
 	look_at_from_position(pos, _focus)
+	fov = 42.0
+
+
+func _apply_cinematic() -> void:
+	var c := Vector3.ZERO
+	var n := 0
+	for s in _cine:
+		if is_instance_valid(s):
+			c += (s as Node3D).global_position
+			n += 1
+	if n == 0:
+		_cine_left = 0.0
+		return
+	c = c / n + Vector3.UP * 1.35
+	var dir := Vector3(sin(_cine_angle), 0.0, cos(_cine_angle))
+	var dist := 3.8
+	# stay inside the ropes when the action is in the ring, so they don't block the shot
+	var lim := float(Ring.spec()["post_half"]) - 0.3
+	if absf(c.x) < lim and absf(c.z) < lim:
+		for axis: int in [0, 2]:
+			if absf(dir[axis]) > 0.001:
+				dist = minf(dist, (signf(dir[axis]) * lim - c[axis]) / dir[axis])
+	dist = maxf(dist, 1.6)
+	var close := c + dir * dist + Vector3.UP * (-0.3 + (3.8 - dist) * 0.25)
+	var k := _cine_blend * _cine_blend * (3.0 - 2.0 * _cine_blend)
+	var from := global_transform
+	var to := Transform3D.IDENTITY.looking_at(c - close, Vector3.UP)
+	to.origin = close
+	global_transform = from.interpolate_with(to, k)
+	fov = lerpf(42.0, 50.0 + (3.8 - dist) * 9.0, k)

@@ -142,3 +142,13 @@ Each milestone has its own feature branch, merges to `main`, and gets a tag (`v0
 - **M10: Polish and release.** Balance, performance (target 60 fps), bug sweep, Linux and Windows export builds, and a `v1.0` tag.
 
 M3 is the key gate: the core grapple and animation approach must feel good there before content scales up.
+
+### Status notes
+- **M4 (v0.4):** ragdoll and apron moves are deferred. Falls use authored animations. The apron is only a route in and out.
+- **v0.4.1 (playtest):** defenders always get a way back. Time down is capped at 4.5 s, whatever the attacker does. There is a 0.6 s wake-up grace. The corner releases after 3 hits or 2.4 s, and mashing gets you out sooner.
+- **M5 (v0.5):**
+  - **Momentum** (0–100) comes from offence, parries, reversals, taunts and kick-outs. A full meter banks a SPECIAL for 20 s, which gives +15% damage and a gold aura.
+  - **Finishers** come from a tie-up or onto a dazed opponent. They get slow-mo, an in-ring orbiting camera, a flash and a crowd pop. Kick-outs right after one are harder.
+  - **Reversals** use timed block presses: a parry before a strike lands, and a reversal in the first ~0.2–0.3 s of tie-up moves. A mash guard stops spamming.
+  - **CPU:** five difficulty levels (Dummy → Legend), with reversal, parry and taunt odds, finisher use, and a block-hold cap.
+  - **Deferred to M7:** the finisher instant replay with VHS filter, the crowd bed, and recorded audio.

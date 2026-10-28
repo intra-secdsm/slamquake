@@ -3,11 +3,18 @@ extends WrestlerController
 ## Utility-style CPU opponent. Difficulty 0 = practice dummy (never acts).
 
 const PROFILES := [
-	# reaction (s), aggression, block chance, heavy chance, run chance, grapple share, mash rate (/s)
-	{"reaction": 9.9, "aggression": 0.0, "block": 0.0, "heavy": 0.0, "run": 0.0, "grapple": 0.0, "mash": 0.0},
-	{"reaction": 0.55, "aggression": 0.4, "block": 0.15, "heavy": 0.2, "run": 0.05, "grapple": 0.35, "mash": 3.5},
-	{"reaction": 0.35, "aggression": 0.6, "block": 0.35, "heavy": 0.3, "run": 0.08, "grapple": 0.45, "mash": 6.0},
-	{"reaction": 0.22, "aggression": 0.78, "block": 0.6, "heavy": 0.35, "run": 0.1, "grapple": 0.5, "mash": 9.0},
+	# reaction (s), aggression, block chance, heavy chance, run chance, grapple share, mash rate (/s),
+	# reversal / parry chance, taunt chance (when there's an opening)
+	{"reaction": 9.9, "aggression": 0.0, "block": 0.0, "heavy": 0.0, "run": 0.0, "grapple": 0.0, "mash": 0.0,
+		"reverse": 0.0, "parry": 0.0, "taunt": 0.0},
+	{"reaction": 0.55, "aggression": 0.4, "block": 0.15, "heavy": 0.2, "run": 0.05, "grapple": 0.35, "mash": 3.5,
+		"reverse": 0.06, "parry": 0.03, "taunt": 0.05},
+	{"reaction": 0.35, "aggression": 0.6, "block": 0.35, "heavy": 0.3, "run": 0.08, "grapple": 0.45, "mash": 6.0,
+		"reverse": 0.15, "parry": 0.08, "taunt": 0.08},
+	{"reaction": 0.22, "aggression": 0.78, "block": 0.6, "heavy": 0.35, "run": 0.1, "grapple": 0.5, "mash": 9.0,
+		"reverse": 0.28, "parry": 0.15, "taunt": 0.1},
+	{"reaction": 0.15, "aggression": 0.88, "block": 0.7, "heavy": 0.4, "run": 0.12, "grapple": 0.55, "mash": 11.0,
+		"reverse": 0.4, "parry": 0.25, "taunt": 0.12},
 ]
 
 var difficulty: int
@@ -27,6 +34,11 @@ var _still_time := 0.0
 var _sidestep := 0.0
 var _sidestep_dir := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
+var _rev_rolled := false
+var _rev_ok := false
+var _rev_at := 0.0
+var _parry_cool := 0.0
+var _block_time := 0.0
 
 
 func _init(level: int, seed_value: int = 0) -> void:
@@ -39,6 +51,13 @@ func update(w: Wrestler, delta: float) -> void:
 	clear_one_shots()
 	_think -= delta
 	_plan_time += delta
+	_parry_cool -= delta
+	# never turtle for long: covering up is a reaction, not a plan
+	_block_time = _block_time + delta if block_held else 0.0
+	if _block_time > 1.2:
+		block_held = false
+	if w.state != Wrestler.State.PAIRED:
+		_rev_rolled = false
 	var target := w.nearest_opponent()
 	if target == null or difficulty == 0:
 		move = Vector3.ZERO
@@ -61,6 +80,9 @@ func update(w: Wrestler, delta: float) -> void:
 		Wrestler.State.TIEUP:
 			_tieup(w, target)
 			return
+		Wrestler.State.PAIRED:
+			_defend_grapple(w)
+			return
 		Wrestler.State.RUN:
 			_running(w, target)
 			return
@@ -80,7 +102,18 @@ func update(w: Wrestler, delta: float) -> void:
 	if _environment(w, target, dist, dir, delta):
 		return
 
-	# react to incoming strikes
+	# a banked SPECIAL: hit the finisher on a dazed opponent, or tie up and hit it from there
+	if w.has_special() and w._finisher_ready_on(target):
+		taunt = true
+		return
+	# react to incoming strikes: a well-timed parry, or just cover up
+	if target.state == Wrestler.State.STRIKE and dist < 1.8 and _parry_cool <= 0.0:
+		var until_hit := float(target._move.get("hit_time", 0.2)) - target.state_time
+		if until_hit < 0.15 and until_hit > 0.02:
+			_parry_cool = 0.6
+			if _rng.randf() < profile["parry"]:
+				block_pressed = true
+				return
 	if target.state == Wrestler.State.STRIKE and dist < 1.8 and _think <= 0.0:
 		block_held = _rng.randf() < profile["block"]
 		_think = profile["reaction"]
@@ -118,6 +151,7 @@ func update(w: Wrestler, delta: float) -> void:
 		move = Vector3.ZERO
 		if _think <= 0.0:
 			_think = profile["reaction"] * _rng.randf_range(0.8, 1.6)
+			_w_special = w.has_special()
 			_choose_neutral_attack(dir)
 
 
@@ -281,6 +315,23 @@ func _toward_floor(w: Wrestler, target: Wrestler) -> Vector3:
 	return v.normalized()
 
 
+var _w_special := false
+
+
+## Being thrown: maybe reverse it, a moment after it starts (like a human reacting).
+func _defend_grapple(w: Wrestler) -> void:
+	move = Vector3.ZERO
+	if w.reversal_window() <= 0.0:
+		return
+	if not _rev_rolled:
+		_rev_rolled = true
+		_rev_ok = _rng.randf() < profile["reverse"]
+		_rev_at = _rng.randf_range(0.04, 0.14)
+	if _rev_ok and w.state_time >= _rev_at:
+		block_pressed = true
+		_rev_ok = false
+
+
 func _choose_neutral_attack(dir: Vector3) -> void:
 	if _rng.randf() < profile["run"]:
 		# bounce off the ropes behind us and come back with a clothesline
@@ -288,7 +339,7 @@ func _choose_neutral_attack(dir: Vector3) -> void:
 		run_held = true
 		_plan_time = 0.0
 	elif _rng.randf() < profile["aggression"]:
-		if _rng.randf() < profile["grapple"]:
+		if _rng.randf() < profile["grapple"] or (_w_special and _rng.randf() < 0.6):
 			grapple = true
 		elif _rng.randf() < profile["heavy"]:
 			kick = true
@@ -302,6 +353,9 @@ func _tieup(w: Wrestler, target: Wrestler) -> void:
 	move = Vector3.ZERO
 	run_held = false
 	if w.state_time < profile["reaction"] * 1.3:
+		return
+	if w.has_special():
+		taunt = true
 		return
 	var r := _rng.randf()
 	var hurt := target.health < 60.0
@@ -353,6 +407,9 @@ func _ground_game(w: Wrestler, target: Wrestler) -> void:
 	if _think > 0.0:
 		return
 	_think = profile["reaction"] * 1.5
+	if not w.has_special() and target.health > 30.0 and _rng.randf() < profile["taunt"]:
+		taunt = true      # play to the crowd for momentum while they're down
+		return
 	var pin_chance := 0.6 if target.health < 35.0 else (0.2 if target.health < 60.0 else 0.03)
 	if w.outside or target.outside:
 		pin_chance = 0.0
