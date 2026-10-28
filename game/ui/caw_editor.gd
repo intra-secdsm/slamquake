@@ -43,7 +43,7 @@ var _names: NameEntry
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.0, 0.06, 0.8)
@@ -242,7 +242,31 @@ func _changed() -> void:
 	_dirty = true
 	_confirm = ""
 	_title.text = String(_entry["name"]).to_upper()
-	stage.preview(_look, "head" if TABS[_tab] == "HEAD" else "full")
+	# a feminine body always has its chest covered: a top, unless a singlet does it
+	if _look.feminine > 0.5 and not _look.singlet:
+		_look.top = true
+	_update_view()
+
+
+## Frame the preview for the focused row (row i, or the focused one): the head tab is a
+## close-up, the colour / pyro / titantron rows show the entrance stage, the rest the ring.
+func _update_view(i: int = -1) -> void:
+	if i < 0:
+		i = _rows.find(get_viewport().gui_get_focus_owner())
+	var view := "full"
+	if TABS[_tab] == "HEAD":
+		view = "head"
+	elif i >= 0 and i < _defs.size() and _defs[i].get("view", "") == "stage":
+		view = "stage"
+	var was_stage := stage.focus() == "stage"
+	stage.preview(_look, view)
+	if view == "stage":
+		stage.preview_entrance(String(_entry["name"]).to_upper(), _entry["tagline"], _entry["color"],
+			_entry["motif"], _entry["pyro"])
+		if not was_stage:
+			stage.preview_move(_entry["moves"]["taunt"])
+	elif was_stage:
+		stage.preview_move("")
 
 
 # ---------------------------------------------------------------- rows
@@ -255,20 +279,33 @@ func _profile_rows() -> Array[Dictionary]:
 		{"text": func() -> String: return "Nickname: %s" % (_entry["tagline"] if _entry["tagline"] != "" else "—"),
 			"press": func() -> void: _names.open("NICKNAME", _entry["tagline"], CawStore.TAGLINE_MAX)},
 		{"text": func() -> String: return "Random name & nickname", "press": _random_name},
-		_entry_color("Colour", "color", NEON),
+		_stage_row(_entry_color("Signature colour", "color", NEON),
+			"Your colour on the titantron, the pyro and the name cards."),
 		{"text": func() -> String: return "◀  Theme: %s  ▶" % Roster.THEME_NAMES.get(_entry["theme"], _entry["theme"]),
 			"change": func(step: int) -> void:
 				_entry["theme"] = themes[wrapi(themes.find(_entry["theme"]) + step, 0, themes.size())]
 				AudioDirector.play_music(_entry["theme"], 0.3)},
-		_entry_choice("Pyro", "pyro", Roster.PYRO_STYLES),
-		_entry_choice("Titantron", "motif", Roster.MOTIFS),
+		_stage_row(_entry_choice("Pyro", "pyro", Roster.PYRO_STYLES), "The pyro that goes off as you come out."),
+		_stage_row(_entry_choice("Titantron", "motif", Roster.MOTIFS), "Your picture on the titantron."),
 	]
+
+
+## A profile row previewed on the entrance stage, with a line of help.
+func _stage_row(def: Dictionary, help: String) -> Dictionary:
+	def["view"] = "stage"
+	return _with_help(def, help)
+
+
+func _with_help(def: Dictionary, help: String) -> Dictionary:
+	def["focus"] = func() -> void: _info.text = help
+	return def
 
 
 func _body_rows() -> Array[Dictionary]:
 	return [
 		{"text": func() -> String: return "◀  Body type: %s  ▶" % ("Feminine" if _look.feminine > 0.5 else "Masculine"),
-			"change": func(_step: int) -> void: _look.feminine = 0.0 if _look.feminine > 0.5 else 1.0},
+			"change": func(_step: int) -> void: _look.feminine = 0.0 if _look.feminine > 0.5 else 1.0,
+			"focus": func() -> void: _info.text = "A feminine body always wears a top or a singlet."},
 		{"text": func() -> String: return "◀  Height: %d cm  ▶" % roundi(_look.height * 185.0),
 			"change": func(step: int) -> void: _look.height = clampf(snappedf(_look.height + step * 0.02, 0.01), 0.88, 1.12)},
 		_look_float("Build", "mass", -1.0, 1.0, 0.1),
@@ -285,11 +322,11 @@ func _head_rows() -> Array[Dictionary]:
 		_look_enum("Facial hair", "facial_hair"),
 		_look_color("Eyes", "eye_color", EYES),
 		_look_enum("Face paint", "face_paint"),
-		_look_color("Paint colour", "paint_color", NEON),
-		_look_color("Paint accent", "paint_color2", NEON),
+		_look_color("Paint colour", "paint_color", NEON, _wear.bind("face_paint")),
+		_look_color("Paint accent", "paint_color2", NEON, _wear.bind("face_paint")),
 		_look_enum("Mask", "mask"),
-		_look_color("Mask colour", "mask_color", NEON),
-		_look_color("Mask trim", "mask_trim", NEON),
+		_look_color("Mask colour", "mask_color", NEON, _wear.bind("mask")),
+		_look_color("Mask trim", "mask_trim", NEON, _wear.bind("mask")),
 	]
 
 
@@ -299,21 +336,23 @@ func _attire_rows() -> Array[Dictionary]:
 		_look_color("Trim", "trim_color", NEON),
 		_look_float("Trunks length", "trunks_bottom", 0.7, 0.95, 0.05, true),
 		_look_bool("Long tights", "tights"),
-		_look_color("Tights", "tights_color", NEON),
+		_look_color("Tights", "tights_color", NEON, _wear.bind("tights")),
 		_look_bool("Singlet", "singlet"),
-		_look_bool("Top", "top"),
-		_look_color("Top colour", "top_color", NEON),
+		_with_help(_look_bool("Top", "top"), "A sports top. A feminine body always wears a top or a singlet."),
+		_look_color("Top colour", "top_color", NEON, _wear.bind("top")),
 		_look_enum("Pattern", "pattern"),
-		_look_color("Pattern colour", "pattern_color", NEON),
+		_look_color("Pattern colour", "pattern_color", NEON, _wear.bind("pattern")),
 		_look_bool("Boots", "boots"),
-		_look_color("Boots colour", "boots_color", NEON),
+		_look_color("Boots colour", "boots_color", NEON, _wear.bind("boots")),
 		_look_float("Boot height", "boot_top", 0.25, 0.5, 0.05),
 		_look_bool("Kneepads", "kneepads"),
 		_look_bool("Elbow pads", "elbowpads"),
 		_look_bool("Wristbands", "wristbands"),
-		_look_color("Pads colour", "pads_color", NEON),
+		_look_color("Pads colour", "pads_color", NEON, func() -> void:
+			if not (_look.kneepads or _look.elbowpads or _look.wristbands):
+				_look.kneepads = true),
 		_look_enum("Tattoo", "tattoo"),
-		_look_color("Tattoo ink", "tattoo_color", NEON),
+		_look_color("Tattoo ink", "tattoo_color", NEON, _wear.bind("tattoo")),
 	]
 
 
@@ -371,10 +410,23 @@ func _look_float(label: String, prop: String, lo: float, hi: float, step: float,
 			_look.set(prop, clampf(snappedf(v, step * 0.5), lo, hi))}
 
 
-func _look_color(label: String, prop: String, palette: Array) -> Dictionary:
+## A colour row; wear (optional) switches on what the colour is for, so the change shows.
+func _look_color(label: String, prop: String, palette: Array, wear: Callable = Callable()) -> Dictionary:
 	return {"text": func() -> String: return "◀  %s: [color]  ▶" % label,
 		"swatch": func() -> Color: return _look.get(prop),
-		"change": func(step: int) -> void: _look.set(prop, _next_color(_look.get(prop), palette, step))}
+		"change": func(step: int) -> void:
+			_look.set(prop, _next_color(_look.get(prop), palette, step))
+			if wear.is_valid():
+				wear.call()}
+
+
+## Put on an item that's off: a bool turns on, an enum at "none" takes its first style.
+func _wear(prop: String) -> void:
+	var v: Variant = _look.get(prop)
+	if v is bool:
+		_look.set(prop, true)
+	elif String(v) == "none":
+		_look.set(prop, _look.choices(prop)[1])
 
 
 func _entry_color(label: String, key: String, palette: Array) -> Dictionary:
@@ -525,5 +577,8 @@ func _on_row_pressed(i: int) -> void:
 
 
 func _on_row_focus(i: int) -> void:
+	if _page == "edit":
+		_update_view(i)
+		_info.text = ""
 	if i < _defs.size() and _defs[i].has("focus"):
 		_defs[i]["focus"].call()

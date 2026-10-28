@@ -61,7 +61,7 @@ func test_new_wrestler_is_edited_and_saved() -> void:
 	_press("★  NEW WRESTLER")
 	assert_eq(ed._page, "edit")
 	var before: Color = ed._entry["color"]
-	_step("Colour", 1)
+	_step("Signature colour", 1)
 	assert_ne(ed._entry["color"], before)
 	ed._set_tab(1)
 	_step("Body type", 1)
@@ -157,3 +157,48 @@ func test_match_with_a_created_wrestler() -> void:
 	assert_eq(w.finisher, "supernova")
 	assert_eq(w.stats["power"], 5)
 	assert_eq((w.controller as CpuController).style, "powerhouse")
+
+
+func test_name_entry_fills_the_screen() -> void:
+	_press("★  NEW WRESTLER")
+	_press("Name")
+	assert_true(ed._names.visible)
+	assert_gt(ed._names.size.x, 0.0, "a zero-sized entry draws off the top of the screen")
+
+
+func test_feminine_body_always_covers_the_chest() -> void:
+	_press("★  NEW WRESTLER")
+	ed._set_tab(1)
+	_step("Body type", 1)
+	assert_true(ed._look.top, "switching to feminine puts a top on")
+	ed._set_tab(3)
+	_step("Top:", 1)
+	assert_true(ed._look.top, "no top-less feminine body")
+	_step("Singlet", 1)
+	_step("Top:", 1)
+	assert_false(ed._look.top, "a singlet covers the chest instead")
+
+
+func test_colour_rows_put_their_item_on() -> void:
+	_press("★  NEW WRESTLER")
+	ed._set_tab(3)
+	assert_false(ed._look.tights)
+	_step("Tights:", 1)
+	assert_true(ed._look.tights)
+	_step("Pattern colour", 1)
+	assert_ne(ed._look.pattern, "none")
+	ed._set_tab(2)
+	_step("Mask colour", 1)
+	assert_ne(ed._look.mask, "none")
+
+
+func test_pyro_and_titantron_rows_show_the_stage() -> void:
+	_press("★  NEW WRESTLER")
+	ed._rows[_row("Pyro")].grab_focus()
+	assert_eq(stage.focus(), "stage")
+	_step("Pyro", 1)
+	assert_eq(stage.focus(), "stage")
+	assert_eq(stage._pyro, ed._entry["pyro"])
+	ed._rows[_row("Theme")].grab_focus()
+	assert_eq(stage.focus(), "full")
+	assert_eq(stage._pyro, "")

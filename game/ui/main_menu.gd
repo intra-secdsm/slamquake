@@ -128,11 +128,15 @@ func _ready() -> void:
 		_show_setup()
 	elif DevTools.get_arg("menu", "") == "options":
 		_show_options()
-	elif DevTools.get_arg("menu", "") == "caw":          # dev: --menu=caw [--caw_tab=N]
+	elif DevTools.get_arg("menu", "") == "caw":          # dev: --menu=caw [--caw_tab=N --caw_row=N --caw_name]
 		_show_caw()
 		if DevTools.has_arg("caw_tab"):
 			_caw._copy_roster()
 			_caw._set_tab(int(DevTools.get_arg("caw_tab")))
+			if DevTools.has_arg("caw_row"):               # dev: --caw_row=N  focus row N
+				_caw._focus_row(int(DevTools.get_arg("caw_row")))
+			if DevTools.has_arg("caw_name"):              # dev: --caw_name  open the name entry
+				_caw._on_row_pressed(0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
