@@ -1,13 +1,104 @@
 [
   {
-    "file": "sfx/hit_light.wav",
+    "file": "music/theme_anthem.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_bruno.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_groove.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_grunge.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_kai.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_menu.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_nova.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_overclock.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_quetzal.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_silas.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_thunder.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/theme_zip.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "music/victory.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized music"
+  },
+  {
+    "file": "sfx/bell.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
     "notes": "procedurally synthesized placeholder"
   },
   {
-    "file": "sfx/hit_heavy.wav",
+    "file": "sfx/bell_triple.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
@@ -28,14 +119,56 @@
     "notes": "procedurally synthesized placeholder"
   },
   {
-    "file": "sfx/whoosh.wav",
+    "file": "sfx/chair_hit.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
     "notes": "procedurally synthesized placeholder"
   },
   {
-    "file": "sfx/rope.wav",
+    "file": "sfx/crowd_cheer_loop.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/crowd_murmur_loop.wav",
+    "source": "tools/synth_music.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/crowd_ooh.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/crowd_pop.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/finisher_impact.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/hit_heavy.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/hit_light.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
@@ -49,28 +182,42 @@
     "notes": "procedurally synthesized placeholder"
   },
   {
-    "file": "sfx/bell.wav",
+    "file": "sfx/parry.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/pyro.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized"
+  },
+  {
+    "file": "sfx/rope.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
     "notes": "procedurally synthesized placeholder"
   },
   {
-    "file": "sfx/bell_triple.wav",
+    "file": "sfx/special_ready.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",
-    "notes": "procedurally synthesized placeholder"
-  },
-  {
-    "file": "sfx/chair_hit.wav",
-    "source": "tools/synth_sfx.py",
-    "author": "generated (this project)",
-    "license": "CC0-1.0",
-    "notes": "procedurally synthesized placeholder"
+    "notes": "procedurally synthesized"
   },
   {
     "file": "sfx/table_crash.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/whoosh.wav",
     "source": "tools/synth_sfx.py",
     "author": "generated (this project)",
     "license": "CC0-1.0",

@@ -56,3 +56,14 @@ func test_bald_hides_all_hair() -> void:
 	model.look = look
 	for hair in model.skeleton.find_children("hair_*", "MeshInstance3D", true, false):
 		assert_false(hair.visible)
+
+
+func test_every_audio_file_has_a_license_entry() -> void:
+	var listed := {}
+	for e: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://assets/audio/licenses.json")):
+		listed[e["file"]] = e
+		assert_true(e.has("license") and e.has("source") and e.has("author"), "complete entry for %s" % e["file"])
+	for dir in ["music", "sfx"]:
+		for f in DirAccess.get_files_at("res://assets/audio/" + dir):
+			if f.ends_with(".wav"):
+				assert_true(listed.has(dir + "/" + f), "%s/%s is in licenses.json" % [dir, f])
