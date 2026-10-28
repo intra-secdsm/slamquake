@@ -176,6 +176,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if get_tree().paused and _pause_menu.visible and event.is_action_pressed("ui_cancel"):
+		_toggle_pause()
+		get_viewport().set_input_as_handled()
+		return
 	for slot in InputRouter.SLOTS:
 		if event.is_action_pressed(InputRouter.action_name(slot, "pause")) and winner == null:
 			_toggle_pause()

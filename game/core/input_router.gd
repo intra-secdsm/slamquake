@@ -46,6 +46,20 @@ func _ready() -> void:
 		_add_axis(slot, "right", JOY_AXIS_LEFT_X, 1.0, JOY_BUTTON_DPAD_RIGHT)
 		_add_axis(slot, "up", JOY_AXIS_LEFT_Y, -1.0, JOY_BUTTON_DPAD_UP)
 		_add_axis(slot, "down", JOY_AXIS_LEFT_Y, 1.0, JOY_BUTTON_DPAD_DOWN)
+	# Godot's menu actions only map the D-pad and stick by default: A confirms, B backs out
+	_add_ui_button("ui_accept", JOY_BUTTON_A)
+	_add_ui_button("ui_cancel", JOY_BUTTON_B)
+
+
+## Any gamepad's button triggers this UI action.
+func _add_ui_button(action: String, button: JoyButton) -> void:
+	for e in InputMap.action_get_events(action):
+		if e is InputEventJoypadButton and e.button_index == button:
+			return
+	var b := InputEventJoypadButton.new()
+	b.device = -1
+	b.button_index = button
+	InputMap.action_add_event(action, b)
 
 
 func _add_axis(slot: int, a: String, axis: JoyAxis, dir: float, dpad: JoyButton) -> void:

@@ -11,6 +11,7 @@ const POSE_TIME := 1.8
 
 var match_node: Match
 var _skipped := false
+var _age := 0.0
 var _centre: Node3D        # keeps the hard cam framing the ring, not just one wrestler
 
 
@@ -43,8 +44,10 @@ func run() -> void:
 	finished.emit()
 
 
-func _process(_delta: float) -> void:
-	if not _skipped and _any_button():
+func _process(delta: float) -> void:
+	_age += delta
+	# ignore the first moment so the button that started the match doesn't also skip this
+	if not _skipped and _age > 0.6 and _any_button():
 		_skipped = true
 		AudioDirector.play_music("", 0.4)
 
