@@ -16,7 +16,7 @@ var _glow: OmniLight3D       ## flames: heat glow that flickers while the jets b
 var _glow_level := 0.0
 
 
-static func fire(parent: Node, at: Vector3, color: Color, style: String = "classic", width: float = 5.0) -> void:
+static func fire(parent: Node, at: Vector3, color: Color, style: String = "classic", width: float = 5.0) -> Pyro:
 	var p := Pyro.new()
 	p.process_mode = Node.PROCESS_MODE_PAUSABLE
 	parent.add_child(p)
@@ -33,6 +33,7 @@ static func fire(parent: Node, at: Vector3, color: Color, style: String = "class
 		_:
 			p._classic(color, width)
 	p.create_tween().tween_callback(p.queue_free).set_delay(LIFETIME.get(style, LIFETIME["classic"]))
+	return p
 
 
 static func show_time(style: String) -> float:

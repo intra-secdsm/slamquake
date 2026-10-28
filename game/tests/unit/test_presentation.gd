@@ -60,7 +60,9 @@ func test_entrances_end_with_everyone_in_place() -> void:
 func test_replay_records_and_restores() -> void:
 	await _start_match()
 	var w := m.wrestlers[0]
-	w.controller = null
+	# nobody moves on their own, so the opponent can't nudge w once the present is restored
+	for x in m.wrestlers:
+		x.controller = null
 	await wait_physics_frames(30)
 	m.replay.mark("test")
 	var before := w.global_position

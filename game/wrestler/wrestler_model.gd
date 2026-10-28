@@ -98,7 +98,8 @@ func apply_look() -> void:
 	m.set_shader_parameter("feminine", l.feminine)
 	m.set_shader_parameter("boots", 1.0 if l.boots else 0.0)
 	m.set_shader_parameter("singlet", 1.0 if l.singlet else 0.0)
-	m.set_shader_parameter("top", 1.0 if l.top else 0.0)
+	# a feminine body always has its chest covered: a top, unless a singlet does it
+	m.set_shader_parameter("top", 1.0 if l.top or (l.feminine > 0.5 and not l.singlet) else 0.0)
 	m.set_shader_parameter("top_color", l.top_color)
 	m.set_shader_parameter("pattern_style", _choice(l, "pattern"))
 	m.set_shader_parameter("pattern_color", l.pattern_color)
