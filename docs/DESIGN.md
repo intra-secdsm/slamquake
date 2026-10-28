@@ -199,7 +199,7 @@ M3 is the key gate: the core grapple and animation approach must feel good there
     - Mister Midnight: win the World title.
     - Hall of Fame: three successful World title defences.
   - **Tests:** a GUT pre-run hook points every save file at throwaway test files.
-- **M10 (v1.0-rc1):**
+- **M10 (v1.0):** released after three release candidates.
   - **Name:** *SLAMQUAKE! Suplex Spectacular!* (working name). The box art is in `docs/art/`, and its artwork is the boot splash. Saves live in the user folder `slamquake`, which stays the same if the name changes. Saves from the old "Wrestle (working title)" folder are copied over once.
   - **Entrances:** a wide stage shot that shows the pyro and titantron, then a looser follow down the aisle.
   - **Performance:**

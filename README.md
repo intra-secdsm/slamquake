@@ -147,7 +147,7 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M7 | Arena, crowd, entrances, menus, audio | ✅ |
 | M8 | Roster of 8 + Create-a-Wrestler | ✅ |
 | M9 | Career mode | ✅ |
-| M10 | Polish & release builds | release candidate (v1.0-rc2) |
+| M10 | Polish & release builds | ✅ v1.0 |
 
 ## License
 
