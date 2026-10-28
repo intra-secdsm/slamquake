@@ -134,7 +134,7 @@ func _leave_stage() -> void:
 	var old := instance_from_id(_pyro_id) as Node
 	if old and not old.is_queued_for_deletion():
 		old.queue_free()
-	arena.titantron.show_text("WRESTLE", "LIVE TONIGHT")
+	arena.titantron.show_text("SLAMQUAKE!", "SUPLEX SPECTACULAR!")
 
 
 ## Show a move on the preview wrestler (paired moves get the stand-in opponent); "" = idle.

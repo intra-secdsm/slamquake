@@ -113,6 +113,7 @@ var _push := Vector3.ZERO        # decaying knockback / lunge velocity
 var _down_left := 0.0
 var _run_dir := Vector3.FORWARD
 var _auto_run := 0.0
+var _loose_rebounds := 0       # rebounds in a row without run held
 var _combo_hits := 0
 var _downed_for := 0.0           # time spent down since last standing (survives stomps and elbow drops)
 var _down_cap := DOWN_MAX
@@ -201,6 +202,11 @@ func is_standing() -> bool:
 
 func is_down() -> bool:
 	return state in [State.DOWN, State.DOWN_HIT, State.KNOCKDOWN]
+
+
+## Seconds until a downed wrestler gets up by themselves (0 when not down).
+func down_time_left() -> float:
+	return maxf(_down_left, 0.0) if state == State.DOWN else 0.0
 
 
 func is_running() -> bool:
@@ -445,6 +451,7 @@ func _st_idle(delta: float) -> void:
 		_run_dir = mv.normalized() if mv.length() > 0.3 else facing()
 		_face(_run_dir, 0.0, true)
 		_auto_run = 0.0
+		_loose_rebounds = 0
 		_whipped = false
 		_enter(State.RUN)
 		return
@@ -473,6 +480,10 @@ func _try_action(action: String) -> bool:
 	var downed := target != null and target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE
 	if held_item:
 		if action == "punch" or action == "kick":
+			# lock on like a strike does
+			if target and global_position.distance_to(target.global_position) < LOCK_ON_RANGE \
+					and facing().angle_to(flat_dir_to(target)) < deg_to_rad(110):
+				_face(flat_dir_to(target), 0.0, true)
 			_enter(State.CHAIR_SWING)
 		elif action == "grapple":
 			drop_item(facing() * 0.8)
@@ -553,7 +564,11 @@ func _st_rebound(_delta: float) -> void:
 			_rebounds += 1
 			_enter(State.WHIPPED)
 		else:
-			_auto_run = 0.9
+			# one bounce carries you back across even with run let go, but no more: on a
+			# diagonal the next rope comes before the run wears off, and you'd never stop
+			var held := controller != null and controller.run_held
+			_loose_rebounds = 0 if held else _loose_rebounds + 1
+			_auto_run = 0.9 if _loose_rebounds <= 1 else 0.0
 			_enter(State.RUN)
 
 
@@ -805,7 +820,8 @@ func _st_knockdown(_delta: float) -> void:
 
 
 func _go_down(extra: float = 0.0) -> void:
-	_down_left = DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5 + extra
+	# slow wrestlers stay down longer, but never past the cap (being beaten down must stay escapable)
+	_down_left = minf((DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5) * Stats.time_down(stats), DOWN_MAX) + extra
 	_down_cap = maxf(DOWN_MAX, _down_left)
 	_enter(State.DOWN)
 
@@ -1089,7 +1105,7 @@ func _st_paired(_delta: float) -> void:
 func reversal_window() -> float:
 	if state != State.PAIRED or _role != "d" or partner == null or partner.state != State.PAIRED:
 		return 0.0
-	return maxf(0.0, float(_pair.get("reversal", 0.0)) - state_time)
+	return maxf(0.0, float(_pair.get("reversal", 0.0)) * Stats.reversal(stats) - state_time)
 
 
 ## Turn the tie-up around: back to where we stood, and throw them instead.
@@ -1149,6 +1165,8 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 	var end_info: Dictionary = mv["root_end_" + role]
 	global_transform = _anchor * Grapples.root_xform(end_info, model_scale())
 	_update_region()
+	if outside:
+		_confine_outside()       # thrown over the top near a barricade: land this side of it
 	_set_solid(true)
 	_pair = {}
 	var end: String = mv["end_" + role]
@@ -1487,6 +1505,11 @@ func _confine_to_ring() -> void:
 	var lim := _rope_limit() + extra
 	position.x = clampf(position.x, -lim, lim)
 	position.z = clampf(position.z, -lim, lim)
+	# never sink into the canvas: two bodies put on the same spot (a whip into an occupied
+	# corner) can make the physics push one of them down through it
+	if position.y < Ring.canvas_height() - 0.05:
+		position.y = Ring.canvas_height()
+		velocity.y = 0.0
 
 
 func _confine_outside() -> void:
@@ -1867,14 +1890,43 @@ func _try_return_to_apron(mv: Vector3) -> bool:
 func _forced_move() -> Vector3:
 	var goal := entry_spot()
 	if outside:
-		# head for the near side of the ring and push in under the ropes
-		var p := global_position
-		var axis := 0 if absf(p.x) > absf(p.z) else 2
-		var n := Vector3.ZERO
-		n[axis] = -signf(p[axis])
-		return n
+		return route_into_ring()     # round the steps and table, then in under the ropes
 	var to := _flat(goal - global_position, Vector3.ZERO)
 	return to.normalized() if to.length() > 0.05 else Vector3.ZERO
+
+
+## Direction to walk from the floor to get back in: towards the middle of the nearest side
+## (the steel steps sit near the corners), or, if the table stands there, the gap past its far end.
+func route_into_ring() -> Vector3:
+	var p := global_position
+	var axis := 0 if absf(p.x) > absf(p.z) else 2
+	var other := 2 - axis
+	var v := Vector3.ZERO
+	v[axis] = -signf(p[axis])
+	var aim := 0.0
+	var window := 1.2
+	if axis == 0 and _table_on_side(signf(p.x)):
+		aim = -signf(p.x) * 1.8
+		window = 0.4
+	if absf(p[other] - aim) > window:
+		v[other] = -signf(p[other] - aim)
+		if absf(p[axis]) < Ring.canvas_half() + 1.5:
+			v[axis] = signf(p[axis]) * 0.4      # step back out around the steps / table
+		else:
+			v[axis] *= 0.2
+	return v.normalized()
+
+
+## True if an unbroken table stands at ringside on the +x (1) or -x (-1) side. The steel
+## steps are at that side's +z end on +x and -z end on -x, so the free gap is at the other end.
+func _table_on_side(side: float) -> bool:
+	var m := get_parent() as Match
+	if m == null:
+		return false
+	for t: FoldingTable in m.tables:
+		if t.intact and signf(t.global_position.x) == side and absf(t.global_position.x) > Ring.canvas_half():
+			return true
+	return false
 
 
 ## Teammate has an opponent in a tie-up: join in for a double suplex.

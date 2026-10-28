@@ -6,7 +6,7 @@ const NAMES := ["power", "speed", "toughness", "charisma"]
 const LABELS := {"power": "Power", "speed": "Speed", "toughness": "Toughness", "charisma": "Charisma"}
 const HELP := {
 	"power": "damage dealt",
-	"speed": "walking and running speed",
+	"speed": "moving, getting up, reversals",
 	"toughness": "damage taken, kicking out",
 	"charisma": "momentum from offence and taunts",
 }
@@ -42,20 +42,30 @@ static func total(s: Dictionary) -> int:
 
 
 static func damage_dealt(s: Dictionary) -> float:
-	return 1.0 + 0.06 * (int(s.get("power", 3)) - 3)
+	return 1.0 + 0.04 * (int(s.get("power", 3)) - 3)
 
 
 static func damage_taken(s: Dictionary) -> float:
-	return 1.0 - 0.06 * (int(s.get("toughness", 3)) - 3)
+	return 1.0 - 0.035 * (int(s.get("toughness", 3)) - 3)
 
 
 static func kickout_ease(s: Dictionary) -> float:
-	return 1.0 - 0.08 * (int(s.get("toughness", 3)) - 3)
+	return 1.0 - 0.04 * (int(s.get("toughness", 3)) - 3)
 
 
 static func speed(s: Dictionary) -> float:
-	return 1.0 + 0.05 * (int(s.get("speed", 3)) - 3)
+	return 1.0 + 0.06 * (int(s.get("speed", 3)) - 3)
+
+
+## How long a knockdown keeps you down (fast wrestlers bounce back up).
+static func time_down(s: Dictionary) -> float:
+	return 1.0 - 0.1 * (int(s.get("speed", 3)) - 3)
+
+
+## Reversal timing window (players) and how often the CPU reverses: quick hands.
+static func reversal(s: Dictionary) -> float:
+	return 1.0 + 0.12 * (int(s.get("speed", 3)) - 3)
 
 
 static func momentum(s: Dictionary) -> float:
-	return 1.0 + 0.12 * (int(s.get("charisma", 3)) - 3)
+	return 1.0 + 0.2 * (int(s.get("charisma", 3)) - 3)

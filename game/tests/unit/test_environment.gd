@@ -164,3 +164,79 @@ func test_count_out() -> void:
 	b.outside = true
 	assert_true(await _wait_until(func() -> bool: return m.winner != null, 200), "counted out")
 	assert_eq(a.state, S.CELEBRATE)
+
+
+func test_cpu_route_back_in_goes_round_the_table() -> void:
+	# from behind the ringside table, the CPU heads for the gap past its end instead of
+	# walking into it (which stalled no-DQ matches: no count-out to end them)
+	var cpu := CpuController.new(3, 1)
+	for z in [-0.8, -0.3, 0.0, 0.3, 0.8, 1.2]:
+		_place(a, Vector3(5.4, 0, z), Vector3.LEFT)
+		var v := cpu._toward_ring(a)
+		assert_gt(absf(v.z), 0.9, "from z=%.1f it walks along the table, not into it (%s)" % [z, v])
+		assert_lt(v.z, 0.0, "towards the end away from the steel steps")
+	m.tables[0].smash()
+	_place(a, Vector3(5.4, 0, 0.0), Vector3.LEFT)
+	assert_almost_eq(cpu._toward_ring(a), Vector3.LEFT, Vector3.ONE * 0.01, "once it's broken, straight in")
+
+
+func test_letting_go_of_run_stops_a_diagonal_run() -> void:
+	# corner to corner, every rope comes before the run wears off: it must still stop
+	_place(b, Vector3(-2, Ring.canvas_height(), -2), Vector3.FORWARD)
+	_place(a, Vector3(-2, Ring.canvas_height(), 0), Vector3(1, 0, 1).normalized())
+	ca.hold_run = true
+	ca.hold_move = Vector3(1, 0, 1).normalized()
+	assert_true(await _wait_until(func() -> bool: return a.state == S.REBOUND, 120), "ran into the ropes")
+	ca.hold_run = false
+	ca.hold_move = Vector3.ZERO
+	assert_true(await _wait_until(func() -> bool: return a.state == S.IDLE, 300), "stopped running")
+
+
+func test_two_wrestlers_on_one_corner_spot_stay_on_the_canvas() -> void:
+	# both dropped on the same corner spot, as when a whip lands someone in an occupied corner
+	var spot := Vector3(lim + 0.18, Ring.canvas_height(), -(lim + 0.18))
+	_place(b, spot, Vector3.FORWARD)
+	_place(a, spot + Vector3(0, 0.02, 0), Vector3.FORWARD)
+	for i in 30:
+		await wait_physics_frames(1)
+		assert_gt(a.global_position.y, Ring.canvas_height() - 0.1)
+		assert_gt(b.global_position.y, Ring.canvas_height() - 0.1)
+
+
+func test_thrown_over_the_top_lands_inside_the_barricade() -> void:
+	# a big throw right by the barricade once left its victim inside the wall
+	var mv := Grapples.get_move("quetzal_rana")
+	var wall := float(Ring.spec()["barricade_half"])
+	for turn in [0.0, PI / 2, PI, -PI / 2]:
+		b._anchor = Transform3D(Basis(Vector3.UP, turn), Vector3(0, 0.0, wall - 0.5))
+		b._end_paired(mv, "d", a)
+		assert_true(b.outside)
+		assert_lt(absf(b.global_position.z), wall - 0.3, "this side of the barricade (turned %.1f)" % turn)
+		assert_lt(absf(b.global_position.x), wall - 0.3)
+
+
+func test_cpu_with_a_chair_squares_up_before_swinging() -> void:
+	# swinging at someone beside you only hits air; a CPU once did that forever
+	GameState.rules = "nodq"
+	var chair := m.chairs[0]
+	_place(a, chair.global_position + Vector3(0.6, 0, 0), Vector3.LEFT)
+	_place(b, chair.global_position + Vector3(1.6, 0, 0), Vector3.LEFT)
+	a.outside = true
+	b.outside = true
+	await wait_physics_frames(10)
+	ca.press = "grapple"
+	assert_true(await _wait_until(func() -> bool: return a.held_item != null, 60), "picked up the chair")
+	await _wait_until(func() -> bool: return a.state == S.IDLE, 60)
+	b.global_position = a.global_position + a.facing().rotated(Vector3.UP, PI / 2) * 0.9   # right beside
+	var hp := b.health
+	a.controller = CpuController.new(3, 1)
+	assert_true(await _wait_until(func() -> bool: return b.health < hp, 240), "the chair connected")
+
+
+func test_route_back_in_steps_round_the_steel_steps() -> void:
+	# an illegal partner sent back to the apron once walked onto the steps and stuck there
+	for start in [Vector3(-4.3, 0, -2.3), Vector3(4.3, 0, 2.3)]:
+		_place(a, start, Vector3.FORWARD)
+		var v := a.route_into_ring()
+		assert_eq(signf(v.z), -signf(start.z), "from %s, along the side away from the steps (%s)" % [start, v])
+		assert_gt(absf(v.z), 0.8)

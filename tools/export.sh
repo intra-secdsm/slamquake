@@ -10,8 +10,8 @@ presets=("$@")
 "$GODOT" --headless --path "$ROOT/game" --import >/dev/null 2>&1 || true
 for p in "${presets[@]}"; do
   case "$p" in
-    Linux) out="$ROOT/build/linux/wrestle.x86_64" ;;
-    Windows) out="$ROOT/build/windows/wrestle.exe" ;;
+    Linux) out="$ROOT/build/linux/slamquake.x86_64" ;;
+    Windows) out="$ROOT/build/windows/slamquake.exe" ;;
     *) echo "unknown preset $p" >&2; exit 1 ;;
   esac
   mkdir -p "$(dirname "$out")"

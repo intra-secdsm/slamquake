@@ -19,7 +19,7 @@ const ALL := {
 	"clothesline": {"anim": "clothesline", "reach": 1.25, "arc": 60.0, "damage": 12.0,
 		"stun": 0.5, "lunge": 0.0, "region": "head", "knockdown": true, "knockback": 4.0,
 		"hitstop": 0.13, "sfx": "hit_heavy", "running": true},
-	"dropkick": {"anim": "dropkick", "reach": 1.5, "arc": 40.0, "damage": 10.0, "stun": 0.55,
+	"dropkick": {"anim": "dropkick", "reach": 1.5, "arc": 40.0, "damage": 11.0, "stun": 0.55,
 		"lunge": 1.6, "region": "body", "knockdown": true, "knockback": 3.6, "hitstop": 0.12,
 		"sfx": "hit_heavy", "end": "down"},
 	"superkick": {"anim": "superkick", "reach": 1.35, "arc": 40.0, "damage": 10.0, "stun": 0.6,
@@ -31,7 +31,7 @@ const ALL := {
 	"running_knee": {"anim": "running_knee", "reach": 1.25, "arc": 50.0, "damage": 12.0,
 		"stun": 0.5, "lunge": 0.0, "region": "head", "knockdown": true, "knockback": 3.8,
 		"hitstop": 0.13, "sfx": "hit_heavy", "running": true},
-	"crossbody": {"anim": "crossbody", "reach": 1.4, "arc": 60.0, "damage": 12.0,
+	"crossbody": {"anim": "crossbody", "reach": 1.4, "arc": 60.0, "damage": 13.0,
 		"stun": 0.5, "lunge": 0.0, "region": "body", "knockdown": true, "knockback": 2.0,
 		"hitstop": 0.12, "sfx": "body_fall", "running": true, "end": "down"},
 }

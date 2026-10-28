@@ -27,7 +27,7 @@ func _ready() -> void:
 	add_child(_bg)
 	_label = _caption(TITLE_SIZE, 110)
 	_sub = _caption(SUBTITLE_SIZE, 200)
-	show_text("WRESTLE", "LIVE TONIGHT")
+	show_text("SLAMQUAKE!", "SUPLEX SPECTACULAR!")
 
 
 func _caption(font_size: int, y: float) -> Label:

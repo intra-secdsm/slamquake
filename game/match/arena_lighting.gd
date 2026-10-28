@@ -30,6 +30,8 @@ func _ready() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	_apply_quality(env)
+	Settings.changed.connect(_apply_quality.bind(env))
 
 	# overhead lighting truss: one strong key straight down (defined contact shadows)
 	# plus four softer fills from the corners
@@ -55,3 +57,9 @@ func _spot(pos: Vector3, target: Vector3, color: Color, energy: float, angle: fl
 	l.shadow_enabled = shadow
 	l.light_volumetric_fog_energy = 0.35
 	return l
+
+
+## Low graphics quality drops the two costliest effects: the volumetric haze and SSAO.
+func _apply_quality(env: Environment) -> void:
+	env.ssao_enabled = Settings.high_quality
+	env.volumetric_fog_enabled = Settings.high_quality

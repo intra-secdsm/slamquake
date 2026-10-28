@@ -1,4 +1,8 @@
-# Wrestle (working title)
+# SLAMQUAKE! Suplex Spectacular!
+
+<img src="docs/art/SLAMQUAKE-Suplex-Spectacular-cover-v2.png" alt="Box art" width="420">
+
+*Big muscles. Bigger egos. Earth-shattering slams.*
 
 An original 90s-style arcade pro wrestling game: grapples, top-rope dives, rope rebounds,
 turnbuckle slams, folding chairs and tables. Includes 1v1 arcade/practice, 2v2 tag team
@@ -110,8 +114,8 @@ Mister Midnight. The career saves after every show to `user://career.json`, and 
 
 **Presentation:** matches open with entrances (theme music, pyro, the titantron, a walk down the ramp);
 press any button to skip. Pinfall wins get a slow-motion VHS instant replay of the finish. **Options**
-(main menu): music, sound effects and crowd volume, fullscreen, the CRT filter, entrances and replays,
-saved to `user://settings.cfg`.
+(main menu): music, sound effects and crowd volume, fullscreen, graphics (High, or Low for slower PCs), the CRT filter, entrances and replays,
+saved to `user://settings.cfg`. `user://` is `~/.local/share/slamquake/` on Linux and `%APPDATA%\slamquake\` on Windows.
 
 ## Testing
 
@@ -143,4 +147,4 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M7 | Arena, crowd, entrances, menus, audio | ✅ |
 | M8 | Roster of 8 + Create-a-Wrestler | ✅ |
 | M9 | Career mode | ✅ |
-| M10 | Polish & release builds | |
+| M10 | Polish & release builds | release candidate (v1.0-rc1) |

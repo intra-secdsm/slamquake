@@ -3,6 +3,7 @@ extends Node
 ## possible and fails if a wrestler gets stuck, leaves the ring, or nothing happens.
 ##   godot --headless --fixed-fps 60 --path game res://dev/soak.tscn -- --seconds=300
 ##     [--mode=singles|tag|mixed] [--moves=slot:id,slot:id]  (--moves forces those moves on everyone)
+##     [--balance]  singles between equal CPUs only, printing every wrestler's win-loss record
 
 const S := Wrestler.State
 const STUCK_LIMIT := {  # max seconds allowed in one state
@@ -31,6 +32,8 @@ var _was_rebound := {}
 var _over := false
 var _over_time := 0.0
 var _last_move := ""
+var _record := {}         # roster id -> [wins, losses, draws]
+var _dealt := {}          # --balance: roster id -> {move id: damage dealt with it}
 
 
 func _ready() -> void:
@@ -46,7 +49,13 @@ func _new_match() -> void:
 		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 0, "difficulty": 3, "team": 0},
 		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4), "team": 1},
 	]
-	var tag := DevTools.get_arg("mode", "mixed") == "tag" or (DevTools.get_arg("mode", "mixed") == "mixed" and randf() < 0.4)
+	var balance := DevTools.has_arg("balance")
+	if balance:
+		GameState.match_entrants[1]["difficulty"] = 3
+		while GameState.match_entrants[1]["roster"] == GameState.match_entrants[0]["roster"]:
+			GameState.match_entrants[1]["roster"] = randi_range(0, Roster.builtin().size() - 1)
+	var tag := not balance and (DevTools.get_arg("mode", "mixed") == "tag"
+		or (DevTools.get_arg("mode", "mixed") == "mixed" and randf() < 0.4))
 	if tag:
 		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 2, "difficulty": 3, "team": 0})
 		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 3,
@@ -57,7 +66,11 @@ func _new_match() -> void:
 	_match_time = 0.0
 	_over = false
 	_over_time = 0.0
-	_match.match_ended.connect(func(_w: Wrestler) -> void:
+	_match.match_ended.connect(func(winner: Wrestler) -> void:
+		for i in 2:
+			var id: String = Roster.builtin()[GameState.match_entrants[i]["roster"]]["id"]
+			var r: Array = _record.get_or_add(id, [0, 0, 0])
+			r[2 if winner == null else (0 if winner == _match.wrestlers[i] else 1)] += 1
 		_over = true
 		_stats["matches"] += 1
 		var key := "%s%s/%s" % ["tag-" if _match.tag_mode else "", GameState.rules, _match.finish_reason]
@@ -68,7 +81,13 @@ func _new_match() -> void:
 		var kv := pair.split(":")
 		if kv.size() == 2:
 			forced[kv[0]] = kv[1]
+	if balance:
+		_track_damage()
 	for w in _match.wrestlers:
+		if DevTools.has_arg("flat_stats"):       # balance experiments: take stats / AI styles out
+			w.stats = Stats.defaults()
+		if DevTools.has_arg("no_style") and w.controller is CpuController:
+			(w.controller as CpuController)._mods = {}
 		for slot_id in forced:
 			w.moves[slot_id] = forced[slot_id]
 		w.struck.connect(func(_a: Wrestler, _v: Wrestler, _m: Dictionary, blocked: bool) -> void:
@@ -89,6 +108,25 @@ func _new_match() -> void:
 		w.landed_outside.connect(func(_v: Wrestler, _at: Vector3) -> void: _stats["exits"] += 1)
 	for t in _match.tables:
 		t.broken.connect(func(_t: FoldingTable) -> void: _stats["tables"] += 1)
+
+
+## Credit every bit of health a wrestler loses to the opponent's latest move.
+func _track_damage() -> void:
+	for i in 2:
+		var w := _match.wrestlers[i]
+		var by := _match.wrestlers[1 - i]
+		var by_id: String = Roster.builtin()[GameState.match_entrants[1 - i]["roster"]]["id"]
+		var last := {"move": "?", "hp": w.health}
+		by.move_performed.connect(func(_a: Wrestler, id: String) -> void: last["move"] = id)
+		w.struck.connect(func(a: Wrestler, _v: Wrestler, mv: Dictionary, _b: bool) -> void:
+			if a == by:
+				last["move"] = mv.get("anim", "strike"))
+		w.health_changed.connect(func(_w: Wrestler) -> void:
+			var lost: float = last["hp"] - w.health
+			last["hp"] = w.health
+			if lost > 0.0:
+				var d: Dictionary = _dealt.get_or_add(by_id, {})
+				d[last["move"]] = d.get(last["move"], 0.0) + lost)
 
 
 func _physics_process(delta: float) -> void:
@@ -148,6 +186,15 @@ func _finish() -> void:
 		avg += d / maxf(1, _durations.size())
 	print("SOAK %.0fs: %s avg match %.0fs" % [_elapsed, _stats, avg])
 	print("MOVES ", _moves)
+	var ids := _record.keys()
+	ids.sort_custom(func(a: String, b: String) -> bool: return _record[a][0] > _record[b][0])
+	for id: String in ids:
+		var r: Array = _record[id]
+		print("BALANCE %-16s %3d-%3d-%d  %3.0f%%" % [id, r[0], r[1], r[2], 100.0 * r[0] / maxi(r[0] + r[1], 1)])
+		var d: Dictionary = _dealt.get(id, {})
+		var moves := d.keys()
+		moves.sort_custom(func(x: String, y: String) -> bool: return d[x] > d[y])
+		print("DEALT %s %s" % [id, " ".join(moves.map(func(mv: String) -> String: return "%s=%.0f" % [mv, d[mv]]))])
 	print("ENDINGS ", _endings, " longest %.0fs" % (_durations.max() if not _durations.is_empty() else 0.0))
 	if _stats["hits"] == 0 or _stats["matches"] == 0:
 		_failures.append("no complete matches: %s" % _stats)
