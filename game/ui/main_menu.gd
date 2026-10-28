@@ -55,20 +55,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 12)
 	_setup.add_child(box)
 
-	var title := Label.new()
-	title.text = "WRESTLE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 120)
-	title.add_theme_color_override("font_color", Color("ff2bd6"))
-	title.add_theme_color_override("font_outline_color", Color("00e5ff"))
-	title.add_theme_constant_override("outline_size", 14)
-	box.add_child(title)
-	var sub := Label.new()
-	sub.text = "working title · early playtest build"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 22)
-	sub.add_theme_color_override("font_color", Color("ffd400"))
-	box.add_child(sub)
+	box.add_child(_logo(100, 36))
 	box.add_child(Control.new())
 
 	for i in ROWS:
@@ -197,27 +184,47 @@ func _show_setup() -> void:
 	_start_button.grab_focus()
 
 
+## The game's logo: chrome SLAMQUAKE! over a hot yellow subtitle, as on the box art.
+func _logo(size: int, sub_size: int) -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", -int(size * 0.12))
+	var title := Label.new()
+	title.text = "SLAMQUAKE!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", size)
+	title.add_theme_color_override("font_color", Color("eef2ff"))
+	title.add_theme_color_override("font_outline_color", Color("ff2bd6"))
+	title.add_theme_constant_override("outline_size", maxi(8, size / 9))
+	title.add_theme_color_override("font_shadow_color", Color("3a0a6e"))
+	title.add_theme_constant_override("shadow_offset_x", size / 30)
+	title.add_theme_constant_override("shadow_offset_y", size / 14)
+	box.add_child(title)
+	var sub := Label.new()
+	sub.text = "SUPLEX SPECTACULAR!"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", sub_size)
+	sub.add_theme_color_override("font_color", Color("ffd400"))
+	sub.add_theme_color_override("font_outline_color", Color("ff4a00"))
+	sub.add_theme_constant_override("outline_size", maxi(6, sub_size / 6))
+	sub.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	sub.add_theme_constant_override("shadow_offset_y", sub_size / 10)
+	box.add_child(sub)
+	return box
+
+
 func _build_title() -> Control:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var logo := Label.new()
-	logo.text = "WRESTLE"
+	var logo := _logo(220, 84)
 	logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	logo.position = Vector2(-700, 200)
-	logo.size = Vector2(1400, 260)
-	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	logo.add_theme_font_size_override("font_size", 230)
-	logo.add_theme_color_override("font_color", Color("ff2bd6"))
-	logo.add_theme_color_override("font_outline_color", Color("00e5ff"))
-	logo.add_theme_constant_override("outline_size", 24)
-	logo.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-	logo.add_theme_constant_override("shadow_offset_y", 14)
+	logo.position = Vector2(-800, 150)
+	logo.size = Vector2(1600, 340)
 	root.add_child(logo)
 	var tag := Label.new()
-	tag.text = "★  NINETIES ARCADE GRAPPLING  ★"
+	tag.text = "BIG MUSCLES.  BIGGER EGOS.  EARTH-SHATTERING SLAMS."
 	tag.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	tag.position = Vector2(-700, 470)
+	tag.position = Vector2(-700, 570)
 	tag.size = Vector2(1400, 60)
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag.add_theme_font_size_override("font_size", 40)
@@ -240,7 +247,7 @@ func _build_title() -> Control:
 	tw.tween_property(press, "modulate:a", 0.15, 0.55)
 	tw.tween_property(press, "modulate:a", 1.0, 0.55)
 	var foot := Label.new()
-	foot.text = "working title · playtest build · all wrestlers are fictional"
+	foot.text = "playtest build · all wrestlers are fictional"
 	foot.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	foot.position = Vector2(-500, -90)
 	foot.size = Vector2(1000, 40)

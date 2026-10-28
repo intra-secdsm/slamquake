@@ -19,6 +19,7 @@ var _cine_left := 0.0
 var _cine_angle := 0.0
 var _cine_blend := 0.0
 var _follow: Node3D
+var _follow_wide := false
 
 
 func _ready() -> void:
@@ -40,9 +41,11 @@ func cinematic(subjects: Array, facing: Vector3, seconds: float) -> void:
 
 
 ## Entrance camera: walk backwards in front of `target` (null returns to the hard cam).
-func follow(target: Node3D) -> void:
+## `wide` pulls right back to show the stage, the titantron and the pyro behind them.
+func follow(target: Node3D, wide := false) -> void:
 	var was := _follow
 	_follow = target
+	_follow_wide = wide
 	if target and was == null:
 		global_transform = _follow_xform(target)
 	elif target == null and was != null:
@@ -54,8 +57,12 @@ func _follow_xform(target: Node3D) -> Transform3D:
 	var to_ring := Vector3(-chest.x, 0, -chest.z)
 	to_ring = to_ring.normalized() if to_ring.length() > 0.5 else Vector3.BACK
 	var side := to_ring.cross(Vector3.UP)
-	var pos := chest + to_ring * 3.4 + side * 1.1 + Vector3.UP * 0.35
-	var x := Transform3D.IDENTITY.looking_at(chest - pos, Vector3.UP)
+	var pos := chest + to_ring * 5.2 + side * 1.5 + Vector3.UP * 0.5
+	var aim := chest
+	if _follow_wide:
+		pos = chest + to_ring * 10.0 + side * 2.2 + Vector3.UP * 0.6
+		aim = chest + Vector3.UP * 1.1 - side * 0.6
+	var x := Transform3D.IDENTITY.looking_at(aim - pos, Vector3.UP)
 	x.origin = pos
 	return x
 

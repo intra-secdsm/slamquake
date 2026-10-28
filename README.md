@@ -1,4 +1,8 @@
-# Wrestle (working title)
+# SLAMQUAKE! Suplex Spectacular!
+
+<img src="docs/art/SLAMQUAKE-Suplex-Spectacular-cover-v2.png" alt="Box art" width="420">
+
+*Big muscles. Bigger egos. Earth-shattering slams.*
 
 An original 90s-style arcade pro wrestling game: grapples, top-rope dives, rope rebounds,
 turnbuckle slams, folding chairs and tables. Includes 1v1 arcade/practice, 2v2 tag team

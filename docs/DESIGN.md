@@ -1,7 +1,7 @@
 # Design Document
 
 ## Overview
-An original, 90s-style arcade pro wrestling game. Assets are generated procedurally with Blender; the game runs in Godot.
+**SLAMQUAKE! Suplex Spectacular!** (working name; box art in `docs/art/`): an original, 90s-style arcade pro wrestling game. Assets are generated procedurally with Blender; the game runs in Godot.
 
 **Core decisions:**
 - **Visuals:** stylized modern. Bold, chunky "action-figure" characters, modern lighting, bloom, volumetric spotlights and pyro, and 90s attitude (neon, CRT/VHS-style menus and replays).
