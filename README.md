@@ -99,6 +99,15 @@ boots, pads, tattoos), every move slot including the finisher, and stats. The wr
 live, moves play as you pick them, and names can be entered with a pad. Created wrestlers are saved
 to `user://created_wrestlers.json` and can be picked anywhere a roster wrestler can.
 
+**Career** (main menu): take a roster or created wrestler from the bottom of the rankings on
+*Saturday Slamtime* to the World title. Each month is three weekly shows and then a pay-per-view.
+Wins earn ranking points, and whoever is number one when a month starts challenges the champion at
+that PPV. You also get a tag partner (two tag wins earn a tag title shot) and a rival each month,
+with comic-style promo scenes and a no-DQ grudge match at the PPV. Champions wear their belts to the
+ring. Unlocks: the *Champion* pyro for created wrestlers and two hidden wrestlers, Roxy Ravage and
+Mister Midnight. The career saves after every show to `user://career.json`, and unlocks go to
+`user://unlocks.json`.
+
 **Presentation:** matches open with entrances (theme music, pyro, the titantron, a walk down the ramp);
 press any button to skip. Pinfall wins get a slow-motion VHS instant replay of the finish. **Options**
 (main menu): music, sound effects and crowd volume, fullscreen, the CRT filter, entrances and replays,
@@ -133,5 +142,5 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M6 | Tag team, 4 local players | ✅ |
 | M7 | Arena, crowd, entrances, menus, audio | ✅ |
 | M8 | Roster of 8 + Create-a-Wrestler | ✅ |
-| M9 | Career mode | |
+| M9 | Career mode | ✅ |
 | M10 | Polish & release builds | |

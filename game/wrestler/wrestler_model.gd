@@ -60,6 +60,11 @@ func set_aura(amount: float) -> void:
 	_body_mat.set_shader_parameter("aura", amount)
 
 
+## Wear a championship belt: 0 none, 1 world title (gold), 2 tag titles (silver).
+func set_belt(kind: int) -> void:
+	_body_mat.set_shader_parameter("belt", kind)
+
+
 func apply_look() -> void:
 	var l := look
 	_model.scale = Vector3.ONE * l.height

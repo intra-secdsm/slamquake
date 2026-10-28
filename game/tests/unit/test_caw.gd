@@ -146,7 +146,7 @@ func test_match_with_a_created_wrestler() -> void:
 	CawStore.put(e)
 	GameState.rules = "nodq"
 	GameState.match_entrants = [
-		{"roster": Roster.builtin().size(), "control": "cpu", "slot": 0, "difficulty": 2},
+		{"roster": Roster.find(e["id"]), "control": "cpu", "slot": 0, "difficulty": 2},
 		{"roster": 0, "control": "cpu", "slot": 1, "difficulty": 2},
 	]
 	var m: Match = load("res://match/match.tscn").instantiate()

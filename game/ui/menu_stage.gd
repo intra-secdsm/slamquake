@@ -4,6 +4,7 @@ extends Node3D
 ## standing in the ring (right of the menu), with a slowly drifting camera.
 ## Create-a-wrestler uses preview(): one wrestler on a slow turntable, framed close, or
 ## ("stage") posing on the entrance stage under their titantron with their pyro going off.
+## Career story scenes use promo(): the cast face each other mid-ring, the camera on the speaker.
 
 var _models: Array[WrestlerModel] = []
 var _cam: Camera3D
@@ -13,7 +14,8 @@ var arena: Arena
 var _pivot: Node3D
 var _hero: WrestlerModel
 var _stooge: WrestlerModel       # stand-in opponent for paired moves
-var _focus := ""                 # "" = lineup, "full", "head" or "stage"
+var _focus := ""                 # "" = lineup, "full", "head", "stage" or "promo"
+var _speaker := -1               # promo: who's talking (-1 = narration, a wide shot)
 var _spin := 0.0
 var _move := ["", ""]
 var _move_wait := 0.0
@@ -35,8 +37,9 @@ func _ready() -> void:
 	_cam.current = true
 
 
-## Put these looks in the ring, facing the camera (up to four).
-func show_lineup(looks: Array) -> void:
+## Put these looks in the ring, facing the camera (up to four); belts: a championship belt
+## each (WrestlerModel.set_belt), if given.
+func show_lineup(looks: Array, belts: Array = []) -> void:
 	end_preview()
 	var y := Ring.canvas_height()
 	while _models.size() < looks.size():
@@ -55,6 +58,23 @@ func show_lineup(looks: Array) -> void:
 		var n := looks.size()
 		m.position = Vector3(0.2 + (i - (n - 1) * 0.5) * 1.15, y, 0.6 - absf(i - (n - 1) * 0.5) * 0.35)
 		m.rotation.y = 0.25 - i * 0.12
+		m.set_belt(belts[i] if i < belts.size() else 0)
+
+
+## A story scene: up to three wrestlers face each other mid-ring; speaker is the one talking
+## (-1 for narration). The camera favours whoever has the floor.
+func promo(looks: Array, belts: Array, speaker: int) -> void:
+	show_lineup(looks, belts)
+	_focus = "promo"
+	_speaker = speaker
+	var y := Ring.canvas_height()
+	var n := looks.size()
+	var spots: Array = [[Vector3.ZERO], [Vector3(-0.6, 0, 0), Vector3(0.6, 0, 0)],
+		[Vector3(-0.7, 0, 0.1), Vector3(0.7, 0, 0.1), Vector3(0, 0, -0.65)]][clampi(n, 1, 3) - 1]
+	for i in mini(n, 3):
+		var m := _models[i]
+		m.position = spots[i] + Vector3(0, y, 0)
+		m.rotation.y = atan2(-m.position.x, -m.position.z + 0.15) if n > 1 else 0.3
 
 
 ## One wrestler alone for editing; focus "full" or "head" frames the camera in the ring,
@@ -154,6 +174,9 @@ func _start_move() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	var y := Ring.canvas_height()
+	if _focus == "promo":
+		_promo_view(delta)
+		return
 	if _focus == "":
 		var swing := sin(_t * 0.12) * 0.6
 		_cam.look_at_from_position(Vector3(-2.6 + swing, y + 1.7, 5.6), Vector3(-1.4 + swing * 0.5, y + 1.15, 0.0))
@@ -175,6 +198,24 @@ func _process(delta: float) -> void:
 		eye = Vector3(p.x - 0.42, y + 1.78, p.z + 1.25)
 		at = Vector3(p.x - 0.22, y + 1.66, p.z)
 	_ease_camera(eye, at, delta)
+
+
+## Over the listener's shoulder onto the speaker; narration gets a wide two-shot.
+func _promo_view(delta: float) -> void:
+	var y := Ring.canvas_height()
+	var shown := _models.filter(func(m: WrestlerModel) -> bool: return m.visible)
+	var centre := Vector3(0, y, 0)
+	if _speaker < 0 or _speaker >= shown.size() or shown.size() == 1:
+		var who: WrestlerModel = shown[maxi(_speaker, 0)] if shown.size() == 1 else null
+		var at := (who.position if who else centre) + Vector3(0, 1.35, 0)
+		_ease_camera(at + Vector3(-0.9, 0.25, 3.2 if who else 4.0), at + Vector3(-0.5, -0.1, 0), delta)
+		return
+	var s: WrestlerModel = shown[_speaker]
+	var face := s.position + Vector3(0, 1.62 * s.look.height, 0)
+	var toward := (centre - s.position).normalized()      # the way the speaker faces
+	var side := toward.cross(Vector3.UP)
+	var eye := face + toward * 1.9 + side * 1.25 + Vector3(0, 0.1, 0)
+	_ease_camera(eye, face + side * 0.1 + Vector3(0, -0.25, 0), delta)
 
 
 func _ease_camera(eye: Vector3, at: Vector3, delta: float) -> void:

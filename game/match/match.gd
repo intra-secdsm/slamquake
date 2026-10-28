@@ -74,6 +74,7 @@ func _ready() -> void:
 			w.controller = CpuController.new(e["difficulty"], 0, CpuController.style_for(entry))
 			w.infinite_health = e["difficulty"] == 0
 		add_child(w)
+		w.model.set_belt(int(GameState.belts.get(entry["id"], 0)))   # champions wear their belts to the ring
 		var spot: Vector3 = START_SPOTS[i % START_SPOTS.size()]
 		w.global_position = spot + Vector3.UP * Ring.canvas_height()
 		w.rotation.y = atan2(-spot.x, -spot.z)
@@ -161,7 +162,10 @@ func _begin_fight() -> void:
 	AudioDirector.play_music("", 1.5)
 	arena.titantron.show_text(team_name(wrestlers[0]), "VS  " + team_name(wrestlers[1]))
 	AudioDirector.play("bell", camera.global_position + Vector3.FORWARD * 3.0, -4.0)
-	hud.banner("FIGHT!", 1.2)
+	for w in wrestlers:
+		w.model.set_belt(0)       # handed to the referee at the bell
+	var label := String(GameState.career_card.get("label", ""))
+	hud.banner(label + "\nFIGHT!" if label != "" else "FIGHT!", 1.6 if label != "" else 1.2)
 
 
 ## Crowd heat: big moments push it up, it settles back to a murmur.
@@ -304,12 +308,14 @@ func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 	await get_tree().create_timer(1.2).timeout
 	if reason == "" and Settings.replays:
 		await _play_replay()
+	var title := _title_result(win)
 	if win:
 		AudioDirector.play_music("victory", 0.2, false)
 		var entry := Roster.get_entry(int(win.get_meta("roster", 0)))
 		var c: Color = entry.get("color", Color("ffd400"))
-		arena.titantron.show_text(team_name(win), "WINNER", c, c.lerp(Color.WHITE, 0.4), entry.get("motif", "grid"))
-	hud.banner("WINNER: %s" % team_name(win) if win else "NO CONTEST", 3.5)
+		arena.titantron.show_text(team_name(win), title if title != "" else "WINNER", c, c.lerp(Color.WHITE, 0.4),
+			entry.get("motif", "grid"))
+	hud.banner(title if title != "" else "WINNER: %s" % team_name(win) if win else "NO CONTEST", 3.5)
 	match_ended.emit(win)
 	await get_tree().create_timer(3.0).timeout
 	if is_inside_tree():
@@ -516,8 +522,13 @@ func _toggle_pause() -> void:
 
 
 func _build_pause_menu() -> void:
-	_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Move List", _open_move_list], ["Restart", _restart],
-		["Main Menu", _quit_to_menu]])
+	if GameState.career:
+		# a career match can be restarted or abandoned (the week is played again), not skipped
+		_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Move List", _open_move_list],
+			["Restart", _restart], ["Back to Career", _quit_to_menu]])
+	else:
+		_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Move List", _open_move_list], ["Restart", _restart],
+			["Main Menu", _quit_to_menu]])
 	_build_move_list()
 
 
@@ -597,10 +608,36 @@ func _refresh_move_list() -> void:
 	_move_list_text[3].text = "\n".join(lines)
 
 
+## In a career title match: put the belts on the winners, and say whether the titles changed
+## hands ("" otherwise).
+func _title_result(win: Wrestler) -> String:
+	var title := String(GameState.career_card.get("title", ""))
+	if title == "" or win == null:
+		return ""
+	var kind := 1 if title == "world" else 2
+	var holder_won := false
+	for w in wrestlers:
+		if w.team == win.team:
+			holder_won = holder_won or int(GameState.belts.get(Roster.get_entry(int(w.get_meta("roster", 0)))["id"], 0)) == kind
+			w.model.set_belt(kind)
+	var belt_name := "WORLD CHAMPION" if kind == 1 else "TAG TEAM CHAMPIONS"
+	return ("AND STILL " if holder_won else "AND NEW ") + belt_name
+
+
+## Career: how tonight went for you (team 0): "win", "loss" or "draw".
+func career_result() -> String:
+	if winner == null or winner.state != Wrestler.State.CELEBRATE:
+		return "draw"
+	return "win" if winner.team == 0 else "loss"
+
+
 func _show_end_menu() -> void:
 	var title := "%s WIN%s" % [team_name(winner), "" if tag_mode else "S"] \
 		if winner.state == Wrestler.State.CELEBRATE else "DRAW"
-	_end_menu = _menu(title, [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
+	if GameState.career:
+		_end_menu = _menu(title, [["Continue", _back_to_career]])
+	else:
+		_end_menu = _menu(title, [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
 	_end_menu.visible = true
 	_end_menu.get_child(0).get_child(1).grab_focus()
 
@@ -643,4 +680,9 @@ func _restart() -> void:
 
 func _quit_to_menu() -> void:
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://ui/main_menu.tscn")
+	get_tree().change_scene_to_file("res://ui/career.tscn" if GameState.career else "res://ui/main_menu.tscn")
+
+
+func _back_to_career() -> void:
+	GameState.career_result = career_result()
+	_quit_to_menu()

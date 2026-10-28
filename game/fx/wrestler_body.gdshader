@@ -45,6 +45,7 @@ uniform int tattoo_style : hint_range(0, 3) = 0;
 uniform float skin_roughness = 0.42;
 uniform float rim_strength = 0.35;
 uniform vec3 aura_color : source_color = vec3(1.0, 0.78, 0.15);
+uniform int belt = 0;          // championship belt: 0 none, 1 world (gold), 2 tag (silver)
 uniform float aura = 0.0;      // SPECIAL banked: glowing edges
 
 varying vec3 rest;       // rest position: x = own left, y = back, z = up (metres)
@@ -400,6 +401,28 @@ void fragment() {
 	}
 	col = mix(col, mix(shirt_color, stripe_color, stripe), shirt_m);
 
+	// championship belt: a black leather strap round the waist, a big oval plate over the navel
+	// with a raised star and rim, and smaller plates over the hips
+	float belt_m = 0.0;
+	float belt_metal = 0.0;
+	if (belt > 0) {
+		float bz = waist + 0.02;
+		float body = lower * (1.0 - leg);
+		float strap = body * band(z, bz - 0.03, bz + 0.03, w);
+		float front = smoothstep(0.01, -0.01, p.y);
+		vec2 q = vec2(p.x, z - bz);
+		float oval = (length(q / vec2(0.105, 0.078)) - 1.0) * 0.075;
+		float main_plate = body * front * fill(oval, px);
+		vec2 sq = vec2(ax - 0.145, z - bz);
+		float side_plate = strap * front * fill((length(sq / vec2(0.035, 0.034)) - 1.0) * 0.034, px);
+		belt_metal = max(main_plate, side_plate);
+		belt_m = max(strap, belt_metal);
+		vec3 metal = belt == 1 ? vec3(1.0, 0.76, 0.22) : vec3(0.93, 0.95, 1.0);
+		float relief = max(stroke(oval + 0.006, 0.0022, px), fill(star5(q, 0.045, 0.45), px));
+		col = mix(col, vec3(0.03, 0.025, 0.02), strap);
+		col = mix(col, mix(metal, metal * 0.55, relief * main_plate), belt_metal);
+	}
+
 	// luchador mask over the head (and the neck down to the collar), outlined in the trim colour
 	float mask_m = 0.0;
 	if (mask_style > 0) {
@@ -437,18 +460,19 @@ void fragment() {
 		col = mix(col, mix(mask_color, mask_trim, trim), mask_m);
 	}
 
-	float cloth = clamp(tight_m + upper_m + top_m + boot_m + knee_m + wrist_m + elbow_m + shirt_m + mask_m, 0.0, 1.0);
+	float cloth = clamp(tight_m + upper_m + top_m + boot_m + knee_m + wrist_m + elbow_m + shirt_m + mask_m + belt_m, 0.0, 1.0);
 	rough = mix(rough, 0.55, paint);                // matte greasepaint
 	rough = mix(rough, 0.28, plate);
 	rough = mix(rough, 0.35, max(upper_m, top_m));  // shiny spandex
 	rough = mix(rough, 0.55, boot_m + knee_m);
 	rough = mix(rough, 0.3, mask_m);                // satin mask
+	rough = mix(rough, 0.25, belt_metal);           // polished title plate
 	sss = mix(sss, 0.0, max(cloth, max(paint * 0.6, plate)));
 	spec = mix(spec, 0.4, cloth);
 
 	ALBEDO = col;
 	ROUGHNESS = rough;
-	METALLIC = 0.85 * plate * (1.0 - mask_m);
+	METALLIC = max(0.85 * plate * (1.0 - mask_m), (belt == 1 ? 0.95 : 0.7) * belt_metal);
 	SPECULAR = spec;
 	SSS_STRENGTH = sss;
 	RIM = rim_strength;

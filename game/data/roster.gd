@@ -1,11 +1,12 @@
 class_name Roster
-## The eight built-in wrestlers, followed by any created wrestlers (CawStore).
-## All characters are original.
+## The eight built-in wrestlers, then hidden wrestlers unlocked in career mode (Unlocks),
+## then any created wrestlers (CawStore). All characters are original.
 ##   id: stable key (saves, career)   moves: Movesets slot -> move id   stats: see Stats
 ##   theme: music track   pyro: entrance pyrotechnics style   motif: titantron graphic
 ##   style: how the CPU fights them (CpuController.STYLES)
 
-const PYRO_STYLES := ["classic", "fireworks", "flames", "sparks", "none"]
+## "champion" is earned in career mode (Unlocks "pyro_champion")
+const PYRO_STYLES := ["classic", "fireworks", "flames", "sparks", "none", "champion"]
 const MOTIFS := ["grid", "storm", "bolts", "steel", "feathers", "checker", "waves", "circuit", "stars"]
 ## every theme a created wrestler can walk out to (roster themes first)
 const THEMES := ["theme_thunder", "theme_zip", "theme_bruno", "theme_quetzal", "theme_silas", "theme_kai",
@@ -16,13 +17,44 @@ const THEME_NAMES := {"theme_thunder": "Southside Storm", "theme_zip": "High Vol
 	"theme_groove": "Ringside Groove", "theme_grunge": "Flannel Fury"}
 
 static var _builtin: Array[Dictionary] = []
+static var _hidden: Array[Dictionary] = []
 
 
-## Built-in wrestlers, then created ones.
+## Built-in wrestlers, unlocked hidden ones, then created ones.
 static func all() -> Array[Dictionary]:
 	var out: Array[Dictionary] = builtin().duplicate()
+	for e in hidden():
+		if Unlocks.has(e["id"]):
+			out.append(e)
 	out.append_array(CawStore.entries())
 	return out
+
+
+## Pyro styles a created wrestler can pick (the champion's pyro has to be earned).
+static func pyro_styles() -> Array:
+	return PYRO_STYLES.filter(func(p: String) -> bool: return p != "champion" or Unlocks.has("pyro_champion"))
+
+
+## The hidden wrestlers, locked or not (each one's id is its Unlocks id).
+static func hidden() -> Array[Dictionary]:
+	if _hidden.is_empty():
+		_hidden = [
+			{"id": "roxy_ravage", "style": "brawler", "name": "Roxy Ravage", "look": _roxy(), "theme": "theme_grunge",
+				"color": Color("ff9ec8"), "tagline": "THE HEAVY METAL HURRICANE", "pyro": "flames", "motif": "bolts",
+				"stats": {"power": 4, "speed": 3, "toughness": 3, "charisma": 2},
+				"moves": {"kick": "big_boot", "running": "clothesline", "tieup_punch": "headbutt",
+					"tieup_punch_dir": "neckbreaker", "tieup_kick": "suplex", "tieup_kick_dir": "piledriver",
+					"back_grapple": "german", "ground_punch": "elbow_drop", "dive_punch": "dive_elbow",
+					"dive_kick": "dive_splash", "taunt": "taunt_roar", "finisher": "wipeout"}},
+			{"id": "mister_midnight", "style": "technician", "name": "Mister Midnight", "look": _midnight(),
+				"theme": "theme_anthem", "color": Color("6a5cff"), "tagline": "THE LAST THING YOU SEE", "pyro": "none",
+				"motif": "stars", "stats": {"power": 4, "speed": 2, "toughness": 4, "charisma": 2},
+				"moves": {"kick": "superkick", "running": "shoulder_tackle", "tieup_punch": "chop",
+					"tieup_punch_dir": "body_slam", "tieup_kick": "gutwrench", "tieup_kick_dir": "powerslam",
+					"back_grapple": "back_suplex", "ground_punch": "knee_drop", "dive_punch": "dive_headbutt",
+					"dive_kick": "dive_elbow", "taunt": "taunt_think", "finisher": "checkmate"}},
+		]
+	return _hidden
 
 
 static func builtin() -> Array[Dictionary]:
@@ -233,6 +265,54 @@ static func _kai() -> WrestlerLook:
 	l.kneepads = false
 	l.pads_color = Color("1fb5ff")
 	l.tattoo = "armband"
+	return l
+
+
+static func _roxy() -> WrestlerLook:
+	var l := WrestlerLook.new()
+	l.feminine = 1.0
+	l.mass = 0.1
+	l.muscle = 0.6
+	l.height = 0.98
+	l.skin_color = Color(0.93, 0.78, 0.68)
+	l.hair_style = "mohawk"
+	l.hair_color = Color("ff9ec8")
+	l.face_paint = "warrior"
+	l.paint_color = Color(0.08, 0.08, 0.1)
+	l.paint_color2 = Color("ff9ec8")
+	l.top = true
+	l.top_color = Color(0.08, 0.08, 0.1)
+	l.trunks_color = Color(0.08, 0.08, 0.1)
+	l.trim_color = Color("ff9ec8")
+	l.tights = true
+	l.tights_color = Color(0.08, 0.08, 0.1)
+	l.pattern = "flames"
+	l.pattern_color = Color("ff9ec8")
+	l.tattoo = "sleeve"
+	l.tattoo_color = Color(0.15, 0.2, 0.35)
+	l.pads_color = Color("ff9ec8")
+	l.elbowpads = true
+	return l
+
+
+static func _midnight() -> WrestlerLook:
+	var l := WrestlerLook.new()
+	l.mass = 0.3
+	l.muscle = 0.7
+	l.height = 1.05
+	l.skin_color = Color(0.55, 0.38, 0.27)
+	l.mask = "classic"
+	l.mask_color = Color(0.05, 0.05, 0.09)
+	l.mask_trim = Color("6a5cff")
+	l.singlet = true
+	l.trunks_color = Color(0.05, 0.05, 0.09)
+	l.trim_color = Color("6a5cff")
+	l.pattern = "stars"
+	l.pattern_color = Color("6a5cff")
+	l.tights = true
+	l.tights_color = Color(0.05, 0.05, 0.09)
+	l.boots_color = Color(0.05, 0.05, 0.09)
+	l.pads_color = Color("6a5cff")
 	return l
 
 
