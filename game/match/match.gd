@@ -284,7 +284,8 @@ func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 	if win:
 		AudioDirector.play_music("victory", 0.2, false)
 		var entry := Roster.get_entry(int(win.get_meta("roster", 0)))
-		arena.titantron.show_text(team_name(win), "WINNER", entry.get("color", Color("ffd400")))
+		var c: Color = entry.get("color", Color("ffd400"))
+		arena.titantron.show_text(team_name(win), "WINNER", c, c.lerp(Color.WHITE, 0.4), entry.get("motif", "grid"))
 	hud.banner("WINNER: %s" % team_name(win) if win else "NO CONTEST", 3.5)
 	match_ended.emit(win)
 	await get_tree().create_timer(3.0).timeout
