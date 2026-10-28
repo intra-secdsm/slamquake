@@ -115,3 +115,14 @@ static func move_name(id: String) -> String:
 	if Grapples.ALL.has(id) and Grapples.ALL[id].has("name"):
 		return Grapples.ALL[id]["name"]
 	return NAMES.get(id, id.capitalize())
+
+
+## A wrestler's moves as [input, move name] rows, finisher first (for move lists).
+static func move_list(moves: Dictionary) -> Array:
+	var rows: Array = []
+	var fin := slot("finisher")
+	rows.append([fin["input"], move_name(String(moves.get("finisher", fin["default"])))])
+	for s in SLOTS:
+		if s["id"] != "finisher":
+			rows.append([s["input"], move_name(String(moves.get(s["id"], s["default"])))])
+	return rows

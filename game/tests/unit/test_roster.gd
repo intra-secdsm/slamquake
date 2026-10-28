@@ -136,3 +136,26 @@ func test_cpu_fights_in_character() -> void:
 	assert_eq(CpuController.new(2, 1).profile, CpuController.PROFILES[2], "no style, no change")
 	assert_eq(CpuController.style_for({"stats": {"power": 2, "speed": 5, "toughness": 2, "charisma": 3}}), "highflyer")
 	assert_eq(CpuController.style_for({"stats": {"power": 5, "speed": 1, "toughness": 4, "charisma": 2}}), "powerhouse")
+
+
+func test_pause_menu_move_list() -> void:
+	GameState.rules = "nodq"
+	GameState.match_entrants = [
+		{"roster": 4, "control": "human", "slot": 0, "difficulty": 2},
+		{"roster": 1, "control": "cpu", "slot": 1, "difficulty": 2},
+	]
+	var m: Match = load("res://match/match.tscn").instantiate()
+	add_child_autofree(m)
+	await wait_physics_frames(2)
+	m._toggle_pause()
+	m._open_move_list()
+	assert_true(m._move_list.visible)
+	assert_string_contains("\n".join(m._move_list_text.map(func(l: Label) -> String: return l.text)), "SILAS WREN")
+	assert_string_contains("\n".join(m._move_list_text.map(func(l: Label) -> String: return l.text)), Movesets.move_name(m.wrestlers[0].finisher).to_upper())
+	m._move_list_who = 1
+	m._refresh_move_list()
+	assert_string_contains("\n".join(m._move_list_text.map(func(l: Label) -> String: return l.text)), "ZIP VOLTA")
+	m._close_move_list()
+	assert_true(m._pause_menu.visible)
+	m._toggle_pause()
+	assert_false(get_tree().paused)

@@ -33,6 +33,9 @@ var _last_pin_defender: Wrestler
 var _count := 0
 var _count_t := 0.0
 var _pause_menu: Control
+var _move_list: Control
+var _move_list_text: Array[Label] = []   # header, inputs column, moves column, footer
+var _move_list_who := 0
 var _end_menu: Control
 
 
@@ -115,10 +118,18 @@ func _ready() -> void:
 	if tag_mode:
 		help.append("TAG: grapple at your corner = tag · on the apron, push toward the ring = come in (5 s)"
 			+ " · hit a pinner = save · grapple a foe your partner has tied up = double team")
-	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip"
-		+ " · taunt with SPECIAL = FINISHER\n"
+	# the moves named are the first human's (everyone's are in the pause menu's move list)
+	var you: Wrestler = wrestlers[0]
+	for w in wrestlers:
+		if w.controller is PlayerController:
+			you = w
+			break
+	var mv := func(slot_id: String) -> String: return Movesets.move_name(you.move_for(slot_id)).to_lower()
+	help.append("Tie-up (grapple): punch = %s / +dir %s · kick = %s / +dir %s · run = Irish whip"
+			% [mv.call("tieup_punch"), mv.call("tieup_punch_dir"), mv.call("tieup_kick"), mv.call("tieup_kick_dir")]
+		+ " · taunt with SPECIAL = %s\n" % you.finisher_name()
 		+ "Tap block just before a hit lands to PARRY · tap block as they start a move on you to REVERSE\n"
-		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN\n"
+		+ "Opponent down: grapple = pick up · punch = %s · kick = stomp · block = PIN\n" % mv.call("ground_punch")
 		+ "Push into the ropes to roll out · grapple near a corner to climb · grapple near a chair to pick it up")
 	hud.setup(wrestlers, "\n".join(help))
 	AudioDirector.crowd_ambience(true)
@@ -127,6 +138,10 @@ func _ready() -> void:
 	for c in get_children():
 		c.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_build_pause_menu()
+	if DevTools.has_arg("movelist"):      # dev: screenshot the pause menu's move list
+		get_tree().create_timer(0.5).timeout.connect(func() -> void:
+			_toggle_pause()
+			_open_move_list())
 	var dummy := GameState.match_entrants.any(func(e: Dictionary) -> bool:
 		return e["control"] == "cpu" and int(e["difficulty"]) == 0)
 	if Settings.entrances and not dummy:
@@ -177,6 +192,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _move_list and _move_list.visible:
+		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("ui_accept"):
+			_close_move_list()
+		elif event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
+			_move_list_who = wrapi(_move_list_who + (1 if event.is_action_pressed("ui_right") else -1), 0, wrestlers.size())
+			_refresh_move_list()
+		get_viewport().set_input_as_handled()
+		return
 	if get_tree().paused and _pause_menu.visible and event.is_action_pressed("ui_cancel"):
 		_toggle_pause()
 		get_viewport().set_input_as_handled()
@@ -383,6 +406,10 @@ func _on_move_performed(w: Wrestler, id: String) -> void:
 	elif float(mv.get("damage", 0.0)) >= 14.0:
 		_crowd("crowd_ooh", -8.0)
 		excite(0.12)
+	# call out the big moves by name (finishers get the full cinematic instead)
+	if not mv.get("finisher", false) and (float(mv.get("damage", 0.0)) >= 12.0 or id.begins_with("dive_")) \
+			and id not in ["dive_whiff", "dive_crossbody", "double_suplex"]:
+		hud.popup(Movesets.move_name(id).to_upper() + "!", w)
 
 
 func _on_reversed(by: Wrestler, _victim: Wrestler, kind: String) -> void:
@@ -483,12 +510,91 @@ func _place_props() -> void:
 func _toggle_pause() -> void:
 	get_tree().paused = not get_tree().paused
 	_pause_menu.visible = get_tree().paused
+	_move_list.visible = false
 	if get_tree().paused:
 		_pause_menu.get_child(0).get_child(1).grab_focus()
 
 
 func _build_pause_menu() -> void:
-	_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Restart", _restart], ["Main Menu", _quit_to_menu]])
+	_pause_menu = _menu("PAUSED", [["Resume", _toggle_pause], ["Move List", _open_move_list], ["Restart", _restart],
+		["Main Menu", _quit_to_menu]])
+	_build_move_list()
+
+
+func _build_move_list() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 11
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	_move_list = ColorRect.new()
+	(_move_list as ColorRect).color = Color(0.02, 0.0, 0.06, 0.88)
+	_move_list.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_move_list.visible = false
+	layer.add_child(_move_list)
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.position = Vector2(-600, -430)
+	box.custom_minimum_size = Vector2(1200, 0)
+	box.add_theme_constant_override("separation", 18)
+	_move_list.add_child(box)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 48)
+	for i in 4:
+		var l := Label.new()
+		l.add_theme_font_size_override("font_size", 40 if i == 0 else (26 if i < 3 else 22))
+		l.add_theme_color_override("font_color", [Color.WHITE, Color(1, 1, 1, 0.75), Color("ffd400"),
+			Color(1, 1, 1, 0.8)][i])
+		l.add_theme_color_override("font_outline_color", Color("ff2bd6") if i == 0 else Color.BLACK)
+		l.add_theme_constant_override("outline_size", 10 if i == 0 else 6)
+		_move_list_text.append(l)
+		if i == 1 or i == 2:
+			columns.add_child(l)
+		else:
+			box.add_child(l)
+		if i == 0:
+			box.add_child(columns)
+
+
+## The pause menu's move list starts on the first human's wrestler; ←→ flips through everyone.
+func _open_move_list() -> void:
+	_move_list_who = 0
+	for i in wrestlers.size():
+		if wrestlers[i].controller is PlayerController:
+			_move_list_who = i
+			break
+	_refresh_move_list()
+	_pause_menu.visible = false
+	_move_list.visible = true
+
+
+func _close_move_list() -> void:
+	_move_list.visible = false
+	_pause_menu.visible = true
+	_pause_menu.get_child(0).get_child(2).grab_focus()
+
+
+func _refresh_move_list() -> void:
+	var w := wrestlers[_move_list_who]
+	var who := "CPU"
+	if w.controller is PlayerController:
+		who = "P%d" % ((w.controller as PlayerController).slot + 1)
+	_move_list_text[0].text = "◀  %s · %s  ▶" % [w.display_name.to_upper(), who]
+	var inputs: Array[String] = []
+	var names: Array[String] = []
+	for row in Movesets.move_list(w.moves):
+		inputs.append(row[0])
+		names.append(String(row[1]).to_upper() + ("   ★ FINISHER" if names.is_empty() else ""))
+	_move_list_text[1].text = "\n".join(inputs)
+	_move_list_text[2].text = "\n".join(names)
+	var lines: Array[String] = [
+		"Block: hold to guard · tap just before a hit = PARRY · tap as a move starts on you = REVERSE",
+		"Run: hold · Downed opponent: grapple = pick up · kick = stomp · block = PIN",
+		"Grapple at a corner = climb · at a chair = pick it up · into the ropes = roll out"]
+	if tag_mode:
+		lines.append("Grapple at your corner = TAG · hit a pinner = SAVE")
+	lines.append("")
+	lines.append("←→ other wrestlers    A / B: back")
+	_move_list_text[3].text = "\n".join(lines)
 
 
 func _show_end_menu() -> void:
