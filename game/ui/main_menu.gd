@@ -24,6 +24,8 @@ var _opt_rows: Array[Button] = []
 var _start_button: Button
 var _caw: CawEditor
 var _pick_info: Label
+var _credits: CreditsScreen
+var _credits_button: Button
 
 
 func _ready() -> void:
@@ -38,6 +40,11 @@ func _ready() -> void:
 	add_child(layer)
 	_title_screen = _build_title()
 	layer.add_child(_title_screen)
+	_credits = CreditsScreen.new()
+	_credits.closed.connect(func() -> void:
+		_options.visible = true
+		_credits_button.grab_focus())
+	layer.add_child(_credits)
 	_setup = Control.new()
 	_setup.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_setup.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -122,6 +129,9 @@ func _ready() -> void:
 		_show_setup()
 	elif DevTools.get_arg("menu", "") == "options":
 		_show_options()
+	elif DevTools.get_arg("menu", "") == "credits":
+		_show_options()
+		_show_credits()
 	elif DevTools.get_arg("menu", "") == "caw":          # dev: --menu=caw [--caw_tab=N --caw_row=N --caw_name]
 		_show_caw()
 		if DevTools.has_arg("caw_tab"):
@@ -297,6 +307,12 @@ func _build_options() -> Control:
 		b.pressed.connect(func() -> void: _change_option(i, ArrowClick.step()))
 		box.add_child(b)
 		_opt_rows.append(b)
+	var credits := Button.new()
+	credits.text = "Credits & licenses"
+	credits.add_theme_font_size_override("font_size", 30)
+	credits.pressed.connect(_show_credits)
+	box.add_child(credits)
+	_credits_button = credits
 	var back := Button.new()
 	back.text = "Back"
 	back.add_theme_font_size_override("font_size", 30)
@@ -349,6 +365,11 @@ func _show_options() -> void:
 	_setup.visible = false
 	_options.visible = true
 	_opt_rows[0].grab_focus()
+
+
+func _show_credits() -> void:
+	_options.visible = false
+	_credits.open()
 
 
 func _close_options() -> void:

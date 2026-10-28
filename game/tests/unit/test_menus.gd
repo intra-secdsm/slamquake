@@ -64,3 +64,20 @@ func test_menu_music_plays_at_the_menu_level() -> void:
 	assert_almost_eq(player.volume_db, AudioDirector.MENU_DB, 0.5, "same level as on the loading screen")
 	AudioDirector.play_music("theme_menu", 0.0, true, AudioDirector.MENU_DB)
 	assert_almost_eq(player.volume_db, AudioDirector.MENU_DB, 0.01, "asking again changes nothing")
+
+
+func test_credits_show_the_engine_license_and_its_components() -> void:
+	var text := CreditsScreen.engine_notices()
+	assert_string_contains(text, "Permission is hereby granted")     # Godot's MIT text
+	for component in ["The FreeType Project", "Jolt Physics", "Mbed TLS"]:
+		assert_string_contains(text, component)
+	menu._show_options()
+	menu._credits_button.pressed.emit()
+	assert_true(menu._credits.visible)
+	assert_false(menu._options.visible)
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	menu._credits._unhandled_input(esc)
+	assert_false(menu._credits.visible, "Esc / B goes back")
+	assert_true(menu._options.visible)

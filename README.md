@@ -147,4 +147,12 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M7 | Arena, crowd, entrances, menus, audio | ✅ |
 | M8 | Roster of 8 + Create-a-Wrestler | ✅ |
 | M9 | Career mode | ✅ |
-| M10 | Polish & release builds | release candidate (v1.0-rc1) |
+| M10 | Polish & release builds | release candidate (v1.0-rc2) |
+
+## License
+
+MIT: see [`LICENSE`](LICENSE). That covers the code, the generator scripts and everything they make
+(models, animations, music, sound effects), the box art and the docs. Third-party software keeps its own
+license. It's all listed in [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md): mainly the Godot
+Engine and the components built into it, plus the GUT test framework and its fonts. Credits are in
+[`docs/CREDITS.md`](docs/CREDITS.md), and in-game under **Options → Credits & licenses**.
