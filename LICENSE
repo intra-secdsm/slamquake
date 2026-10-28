@@ -20,12 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----------------------------------------------------------------------------
-This license covers everything in this repository that the project made: the
-code, the Blender generator scripts and the models and animations they produce,
-the synthesized music and sound effects, the box art, and the documentation.
-
-Third-party software keeps its own license. See docs/THIRD_PARTY_NOTICES.md:
-the Godot Engine (MIT) and the components built into it, which ship inside the
-game builds, and GUT with its bundled fonts in game/addons/gut (MIT and the
-SIL Open Font License; repository only, not part of the game builds).
