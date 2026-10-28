@@ -15,6 +15,15 @@ static func get_entry(i: int) -> Dictionary:
 	return r[clampi(i, 0, r.size() - 1)]
 
 
+## The same wrestler in alternate gear, for when they appear twice in one match.
+static func alt_look(base: WrestlerLook) -> WrestlerLook:
+	var l: WrestlerLook = base.duplicate()
+	for prop in ["trunks_color", "trim_color", "pads_color", "tights_color"]:
+		var c: Color = l.get(prop)
+		l.set(prop, Color.from_hsv(fposmod(c.h + 0.45, 1.0), maxf(c.s, 0.5), c.v))
+	return l
+
+
 static func referee_look() -> WrestlerLook:
 	var l := WrestlerLook.new()
 	l.mass = -0.3

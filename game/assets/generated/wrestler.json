@@ -1,5 +1,91 @@
 {
   "animations": {
+    "apron_enter": {
+      "events": {},
+      "length": 0.7,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.85
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "apron_exit": {
+      "events": {
+        "tag": 0.12
+      },
+      "length": 1.05,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.85
+        ],
+        "yaw": 180
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "apron_reach": {
+      "events": {},
+      "length": 0.5,
+      "loop": true,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "apron_wait": {
+      "events": {},
+      "length": 2.0,
+      "loop": true,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
     "back_body_drop_a": {
       "events": {
         "impact": 0.75

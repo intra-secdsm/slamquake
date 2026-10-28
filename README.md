@@ -61,6 +61,15 @@ Bruno Kessler: Iron Drop). Kicking out right after a finisher is much harder.
 just as a tie-up move (or finisher, or Irish whip) starts on you to reverse it into a hip toss (or a
 reversed whip). Mashing block never works: a press right after another one doesn't count.
 
+**Tag team (2v2):** pick *Tag Team* in the menu; each of the four slots can be a human or the CPU
+(press Enter/A on a slot to switch). Humans get input in slot order: P1 and P2 can use the keyboard,
+P3 and P4 need gamepads 3 and 4. The legal wrestler fights while the partner waits on the far apron and
+slowly recovers. **Tag** by pressing grapple next to your corner. Tagging out below half health is a
+**hot tag**: your partner comes in with a burst of momentum. On the apron, push toward the ring to climb
+in illegally; you get 5 seconds before the referee sends you back. Use that time to **break up a pin**
+(strike the pinner) or to grab an opponent your partner has tied up for a **double suplex**. Only legal
+wrestlers can pin, be pinned or be counted out, and the whole team wins or loses together.
+
 Win by pinfall (pins under the ropes are broken). Normal rules add a 20-count count-out and
 disqualification for chair shots; No DQ allows anything and has no count-outs.
 
@@ -92,7 +101,7 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M3 | Grapples, whips, rope rebounds, pinfalls: first full match | ✅ |
 | M4 | Top rope, outside the ring, chair, tables, count-outs | ✅ |
 | M5 | Momentum, finishers, reversals, game feel, AI | ✅ |
-| M6 | Tag team, 4 local players | |
+| M6 | Tag team, 4 local players | ✅ |
 | M7 | Arena, crowd, entrances, menus, audio | |
 | M8 | Roster of 8 + Create-a-Wrestler | |
 | M9 | Career mode | |

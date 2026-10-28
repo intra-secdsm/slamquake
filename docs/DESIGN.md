@@ -152,3 +152,9 @@ M3 is the key gate: the core grapple and animation approach must feel good there
   - **Reversals** use timed block presses: a parry before a strike lands, and a reversal in the first ~0.2–0.3 s of tie-up moves. A mash guard stops spamming.
   - **CPU:** five difficulty levels (Dummy → Legend), with reversal, parry and taunt odds, finisher use, and a block-hold cap.
   - **Deferred to M7:** the finisher instant replay with VHS filter, the crowd bed, and recorded audio.
+- **M6 (v0.6):**
+  - **Setup and tagging:** four entrants make a tag match. Partners wait on the far apron (±1.9, −3.25) so they stay out of the camera's view. Tags happen at the team's own spot just inside the ropes. Regen on the apron is 0.2 health/s, and a hot tag below 50% health gives +25 momentum.
+  - **Illegal partners:** a 5 s timer, after which the wrestler is steered back to the corner. They can't pin or be counted out.
+  - **Saves and double teams:** a strike on the pinner breaks the pin. The double suplex reuses the suplex animations for two side-by-side attackers.
+  - **Partner AI:** saves (35–80% per pin by difficulty), returns to the corner, tags out when hurt, and occasionally comes in for a double team.
+  - **Fix:** distance checks that used a normalized vector, which had also made the grab range unlimited since M3.

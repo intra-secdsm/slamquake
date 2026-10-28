@@ -4,17 +4,17 @@ extends WrestlerController
 
 const PROFILES := [
 	# reaction (s), aggression, block chance, heavy chance, run chance, grapple share, mash rate (/s),
-	# reversal / parry chance, taunt chance (when there's an opening)
+	# reversal / parry chance, taunt chance (when there's an opening), tag partner pin-save chance
 	{"reaction": 9.9, "aggression": 0.0, "block": 0.0, "heavy": 0.0, "run": 0.0, "grapple": 0.0, "mash": 0.0,
-		"reverse": 0.0, "parry": 0.0, "taunt": 0.0},
+		"reverse": 0.0, "parry": 0.0, "taunt": 0.0, "save": 0.0},
 	{"reaction": 0.55, "aggression": 0.4, "block": 0.15, "heavy": 0.2, "run": 0.05, "grapple": 0.35, "mash": 3.5,
-		"reverse": 0.06, "parry": 0.03, "taunt": 0.05},
+		"reverse": 0.06, "parry": 0.03, "taunt": 0.05, "save": 0.35},
 	{"reaction": 0.35, "aggression": 0.6, "block": 0.35, "heavy": 0.3, "run": 0.08, "grapple": 0.45, "mash": 6.0,
-		"reverse": 0.15, "parry": 0.08, "taunt": 0.08},
+		"reverse": 0.15, "parry": 0.08, "taunt": 0.08, "save": 0.5},
 	{"reaction": 0.22, "aggression": 0.78, "block": 0.6, "heavy": 0.35, "run": 0.1, "grapple": 0.5, "mash": 9.0,
-		"reverse": 0.28, "parry": 0.15, "taunt": 0.1},
+		"reverse": 0.28, "parry": 0.15, "taunt": 0.1, "save": 0.65},
 	{"reaction": 0.15, "aggression": 0.88, "block": 0.7, "heavy": 0.4, "run": 0.12, "grapple": 0.55, "mash": 11.0,
-		"reverse": 0.4, "parry": 0.25, "taunt": 0.12},
+		"reverse": 0.4, "parry": 0.25, "taunt": 0.12, "save": 0.8},
 ]
 
 var difficulty: int
@@ -39,6 +39,11 @@ var _rev_ok := false
 var _rev_at := 0.0
 var _parry_cool := 0.0
 var _block_time := 0.0
+var _tag_time := 0.0             # >0 while heading to the corner to tag out
+var _tag_cooldown := 0.0
+var _apron_think := 0.0
+var _save_rolled := false
+var _save_ok := false
 
 
 func _init(level: int, seed_value: int = 0) -> void:
@@ -83,6 +88,9 @@ func update(w: Wrestler, delta: float) -> void:
 		Wrestler.State.PAIRED:
 			_defend_grapple(w)
 			return
+		Wrestler.State.APRON:
+			_apron(w, delta)
+			return
 		Wrestler.State.RUN:
 			_running(w, target)
 			return
@@ -97,6 +105,8 @@ func update(w: Wrestler, delta: float) -> void:
 	var dist := to.length()
 	var dir := to / maxf(dist, 0.001)
 
+	if w.teammate and _tag_team(w, target, delta):
+		return
 	if _unstick(w, delta):
 		return
 	if _environment(w, target, dist, dir, delta):
@@ -357,6 +367,11 @@ func _tieup(w: Wrestler, target: Wrestler) -> void:
 	if w.has_special():
 		taunt = true
 		return
+	# partner on the way in for a double team: hang on to them
+	var mate := w.teammate
+	if mate and not mate.legal and not mate.on_apron() or mate and mate.state == Wrestler.State.APRON_ENTER:
+		if w.state_time < Wrestler.TIEUP_TIMEOUT - 0.2:
+			return
 	var r := _rng.randf()
 	var hurt := target.health < 60.0
 	var toss := w._rope_toss_normal(target.global_position - w.global_position) if not w.outside else Vector3.ZERO
@@ -422,3 +437,95 @@ func _ground_game(w: Wrestler, target: Wrestler) -> void:
 		punch = true
 	else:
 		grapple = true
+
+
+# ---------------------------------------------------------------- tag team
+
+## On the apron: jump in to save a pin, or to help with a double team.
+func _apron(w: Wrestler, delta: float) -> void:
+	move = Vector3.ZERO
+	block_held = false
+	var mate := w.teammate
+	var inward := Vector3(0, 0, -signf(w.apron_spot.z))
+	if _wants_save(mate):
+		move = inward
+		return
+	if mate.state != Wrestler.State.TIEUP:
+		_apron_think = 0.0
+		return
+	if _apron_think != 0.0:
+		move = inward if _apron_think > 0.0 else Vector3.ZERO
+		return
+	# partner tied someone up near our corner: decide once whether to come in and help
+	var near := (mate.global_position - w.entry_spot()).length() < 3.0
+	_apron_think = 1.0 if near and _rng.randf() < profile["aggression"] * 0.6 else -1.0
+
+
+## Partner pinned: decide once per pin whether to try breaking it up.
+func _wants_save(mate: Wrestler) -> bool:
+	if mate.state != Wrestler.State.PINNED:
+		_save_rolled = false
+		return false
+	if not _save_rolled:
+		_save_rolled = true
+		_save_ok = _rng.randf() < profile["save"]
+	return _save_ok
+
+
+## Saves, double teams, returning to the corner when illegal, and tagging out. True if it set intent.
+func _tag_team(w: Wrestler, target: Wrestler, delta: float) -> bool:
+	var mate := w.teammate
+	run_held = false
+	# break up a pin on our partner
+	if _wants_save(mate) and mate.partner and not w.outside:
+		var pinner := mate.partner
+		var to := pinner.global_position - w.global_position
+		to.y = 0
+		block_held = false
+		if to.length() > 1.0:
+			move = to.normalized()
+		else:
+			move = Vector3.ZERO
+			w._face(to.normalized(), 0.0, true)
+			punch = _think <= 0.0
+			_think = 0.25
+		return true
+	if not w.legal:
+		block_held = false
+		# partner has someone tied up: grab them for a double team
+		if mate.state == Wrestler.State.TIEUP and mate.partner and mate.partner.outside == w.outside:
+			var to := mate.partner.global_position - w.global_position
+			to.y = 0
+			move = to.normalized() if to.length() > 1.2 else Vector3.ZERO
+			grapple = to.length() <= 1.6 and _think <= 0.0
+			if grapple:
+				_think = profile["reaction"]
+			return true
+		# otherwise head back to the corner (the wrestler steps out once it's there)
+		var e := w.entry_spot()
+		var d := Vector2(e.x - w.global_position.x, e.z - w.global_position.z).length()
+		move = w._forced_move() if d > 0.3 else Vector3(0, 0, signf(w.apron_spot.z))
+		return true
+	# legal and hurting: go and make the tag
+	_tag_cooldown -= delta
+	if _tag_time <= 0.0 and _tag_cooldown <= 0.0 and mate.state == Wrestler.State.APRON \
+			and w.health < 55.0 and w.health < mate.health - 15.0 and not w.outside:
+		_tag_time = 0.01
+	if _tag_time > 0.0:
+		_tag_time += delta
+		if _tag_time > 6.0 or w.outside or mate.state != Wrestler.State.APRON:
+			_tag_time = 0.0
+			_tag_cooldown = 8.0
+			return false
+		var e := w.entry_spot() - w.global_position
+		e.y = 0
+		block_held = false
+		if e.length() > Wrestler.TAG_REACH - 0.35:
+			move = e.normalized()
+		else:
+			move = Vector3.ZERO
+			grapple = true
+			_tag_time = 0.0
+			_tag_cooldown = 6.0
+		return true
+	return false

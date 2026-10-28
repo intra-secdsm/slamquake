@@ -7,6 +7,7 @@ class_name Grapples
 ##   in_place: never slide the pair inward (so pins under the ropes still break)
 ##   reversal: seconds after the move starts in which the defender can reverse it (block)
 ##   finisher: needs a SPECIAL; cinematic camera, no momentum, harder kick-outs
+##   anim: reuse another move's animations
 
 const ALL := {
 	"headbutt": {"damage": 6.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_light", "reversal": 0.25},
@@ -22,6 +23,8 @@ const ALL := {
 	"elbow_drop": {"damage": 9.0, "end_a": "idle", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
 		"in_place": true},
 	"hip_toss": {"damage": 7.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
+	# tag team: two attackers share the suplex animation, side by side
+	"double_suplex": {"anim": "suplex", "damage": 22.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
 	# finishers (one per roster wrestler for now; CAW picks from these in M8)
 	"thunder_bomb": {"name": "Thunder Bomb", "damage": 32.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
@@ -35,11 +38,13 @@ const ALL := {
 static func get_move(id: String) -> Dictionary:
 	var m: Dictionary = ALL[id].duplicate()
 	var anims: Dictionary = WrestlerModel.manifest()["animations"]
-	var a: Dictionary = anims[id + "_a"]
-	var d: Dictionary = anims[id + "_d"]
+	var base: String = m.get("anim", id)
+	var a: Dictionary = anims[base + "_a"]
+	var d: Dictionary = anims[base + "_d"]
 	m["id"] = id
-	m["anim_a"] = id + "_a"
-	m["anim_d"] = id + "_d"
+	m["anim_a"] = base + "_a"
+	m["anim_a2"] = base + "_a"
+	m["anim_d"] = base + "_d"
 	m["length"] = float(a["length"])
 	m["events"] = a["events"]
 	m["root_start_d"] = d["root_start"]

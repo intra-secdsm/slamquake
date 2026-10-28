@@ -1,8 +1,9 @@
 class_name Match
 extends Node3D
 ## Sets up and runs a match from GameState.match_entrants: wrestlers, referee, camera,
-## HUD and rules. 1v1. Win by pinfall (pins under the ropes are broken), or in normal
-## rules by count-out (20 while on the floor) or disqualification (weapon shots).
+## HUD and rules. 1v1, or 2v2 tag team when there are four entrants (legal men in the
+## ring, partners on the apron). Win by pinfall (pins under the ropes are broken), or in
+## normal rules by count-out (20 while on the floor) or disqualification (weapon shots).
 
 signal match_ended(winner: Wrestler)
 
@@ -15,12 +16,14 @@ var camera: BroadcastCamera
 var hud: MatchHud
 var referee: Referee
 var wrestlers: Array[Wrestler] = []
+var tag_mode := false
 var winner: Wrestler               ## set when the match ends (a wrestler even on a draw)
 var finish_reason := ""
 var _finished := false
 var tables: Array[FoldingTable] = []
 var chairs: Array[Chair] = []
 var _pin: Dictionary = {}          # {attacker, defender}
+var _saved := false
 var _count := 0
 var _count_t := 0.0
 var _pause_menu: Control
@@ -36,12 +39,18 @@ func _ready() -> void:
 	camera.current = true
 
 	var help: Array[String] = []
+	var used := {}
+	tag_mode = GameState.match_entrants.size() == 4
 	for i in GameState.match_entrants.size():
 		var e: Dictionary = GameState.match_entrants[i]
 		var entry := Roster.get_entry(e["roster"])
 		var w := Wrestler.new()
 		w.name = "Wrestler%d" % (i + 1)
 		w.look = entry["look"]
+		if used.has(e["roster"]):
+			w.look = Roster.alt_look(entry["look"])   # same wrestler twice: alternate colours
+		used[e["roster"]] = true
+		w.team = int(e.get("team", i % 2))
 		w.display_name = entry["name"]
 		w.finisher = entry.get("finisher", "thunder_bomb")
 		w.ring = ring
@@ -60,17 +69,25 @@ func _ready() -> void:
 		w.pin_started.connect(_on_pin_started)
 		w.kicked_out.connect(_on_kicked_out)
 		w.landed_outside.connect(_on_landed_outside)
+		w.tagged.connect(_on_tagged)
+		w.pin_saved.connect(_on_pin_saved)
+		w.double_team.connect(_on_double_team)
 		w.move_performed.connect(_on_move_performed)
 		w.reversed.connect(_on_reversed)
 		w.special_ready.connect(_on_special_ready)
 		wrestlers.append(w)
 		camera.targets.append(w)
 
-	# 1v1 for now: everyone else is an opponent
 	for w in wrestlers:
 		for o in wrestlers:
-			if o != w:
+			if o == w:
+				continue
+			if o.team != w.team:
 				w.opponents.append(o)
+			else:
+				w.teammate = o
+	if tag_mode:
+		_setup_tag_teams()
 
 	_place_props()
 
@@ -82,6 +99,9 @@ func _ready() -> void:
 
 	hud = MatchHud.new()
 	add_child(hud)
+	if tag_mode:
+		help.append("TAG: grapple at your corner = tag · on the apron, push toward the ring = come in (5 s)"
+			+ " · hit a pinner = save · grapple a foe your partner has tied up = double team")
 	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip"
 		+ " · taunt with SPECIAL = FINISHER\n"
 		+ "Tap block just before a hit lands to PARRY · tap block as they start a move on you to REVERSE\n"
@@ -98,6 +118,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if tag_mode:
+		_update_tag_view()
 	if get_tree().paused or winner:
 		return
 	_count_out(delta)
@@ -138,8 +160,9 @@ func _on_count(n: int) -> void:
 func _on_kicked_out(defender: Wrestler) -> void:
 	if _pin.is_empty() or _pin["defender"] != defender:
 		return
-	if referee.count == 2:
+	if referee.count == 2 and not _saved:
 		hud.banner("KICK OUT AT 2!", 1.2)
+	_saved = false
 	_pin = {}
 	hud.show_kickout(null, 0.0)
 	referee.stop_count()
@@ -153,7 +176,7 @@ func outside_count() -> int:
 func _count_out(delta: float) -> void:
 	var out: Array[Wrestler] = []
 	for w in wrestlers:
-		if w.outside:
+		if w.outside and w.legal and not w.on_apron():
 			out.append(w)
 	if out.is_empty() or GameState.rules != "normal":
 		if _count > 0:
@@ -168,11 +191,13 @@ func _count_out(delta: float) -> void:
 		_count += 1
 		hud.show_count(_count)
 		if _count >= COUNT_OUT:
-			if out.size() == wrestlers.size():
+			var teams_out := {}
+			for w in out:
+				teams_out[w.team] = true
+			if teams_out.size() > 1:
 				_finish(null, null, "DOUBLE COUNT-OUT")
 			else:
-				var inside := wrestlers.filter(func(w: Wrestler) -> bool: return not w.outside)
-				_finish(inside[0], out[0], "COUNT-OUT")
+				_finish(out[0].opponents[0], out[0], "COUNT-OUT")
 
 
 func _near_ropes(w: Wrestler) -> bool:
@@ -191,7 +216,7 @@ func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 	hud.show_kickout(null, 0.0)
 	hud.show_count(0)
 	for w in wrestlers:
-		if w == win:
+		if win and w.team == win.team:
 			w.win()
 		else:
 			w.lose()
@@ -200,7 +225,7 @@ func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 	if reason != "":
 		hud.banner(reason + "!", 1.2)
 	await get_tree().create_timer(1.2).timeout
-	hud.banner("WINNER: %s" % win.display_name.to_upper() if win else "NO CONTEST", 3.5)
+	hud.banner("WINNER: %s" % team_name(win) if win else "NO CONTEST", 3.5)
 	match_ended.emit(win)
 	await get_tree().create_timer(3.0).timeout
 	if is_inside_tree():
@@ -218,6 +243,68 @@ func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked:
 	var at := victim.body_center().lerp(attacker.global_position + Vector3.UP * 1.3, 0.25)
 	HitFx.spawn(self, at, heavy)
 	camera.shake(1.0 if heavy else 0.35)
+
+
+## "THUNDER MACK" or "THUNDER MACK & ZIP VOLTA".
+func team_name(w: Wrestler) -> String:
+	var n := w.display_name.to_upper()
+	if w.teammate:
+		n += " & " + w.teammate.display_name.to_upper()
+	return n
+
+
+func _setup_tag_teams() -> void:
+	var y := Ring.canvas_height()
+	var post := float(Ring.spec()["post_half"])
+	var first := {}
+	for w in wrestlers:
+		w.apron_spot = Vector3(-1.9 if w.team == 0 else 1.9, y, -(post + 0.25))
+		w.legal = not first.has(w.team)
+		first[w.team] = true
+		if not w.legal:
+			w.global_position = w.apron_spot
+			w._enter(Wrestler.State.APRON)
+
+
+## Camera and referee follow whoever is in the action, not the partners waiting on the apron.
+func _update_tag_view() -> void:
+	var active: Array[Wrestler] = []
+	for w in wrestlers:
+		if w.state != Wrestler.State.APRON:
+			active.append(w)
+		hud.set_status(w, _tag_status(w))
+	camera.targets.assign(active)
+	referee.wrestlers = active
+
+
+func _tag_status(w: Wrestler) -> String:
+	if winner or w.legal:
+		return ""
+	if w.on_apron():
+		return "on the apron"
+	if w.forced_return:
+		return "REF: BACK TO YOUR CORNER!"
+	return "ILLEGAL  %d" % ceili(Wrestler.ILLEGAL_TIME - w.illegal_time)
+
+
+func _on_tagged(_out: Wrestler, into: Wrestler, hot: bool) -> void:
+	hud.banner("HOT TAG!" if hot else "TAG!", 1.2)
+	hud.popup("TAGGED IN!", into)
+	AudioDirector.play("mat_slap", into.global_position + Vector3.UP * 1.3, 2.0)
+	if hot:
+		_crowd("crowd_pop", -4.0)
+
+
+func _on_pin_saved(by: Wrestler, _pinner: Wrestler) -> void:
+	_saved = true
+	hud.banner("SAVE!", 1.2)
+	hud.popup("SAVE!", by)
+	_crowd("crowd_ooh", -4.0)
+
+
+func _on_double_team(_a: Wrestler, _b: Wrestler, _victim: Wrestler) -> void:
+	hud.banner("DOUBLE TEAM!", 1.4)
+	_crowd("crowd_ooh", -5.0)
 
 
 func _on_landed(w: Wrestler) -> void:
@@ -318,7 +405,8 @@ func _build_pause_menu() -> void:
 
 
 func _show_end_menu() -> void:
-	var title := "%s WINS" % winner.display_name.to_upper() if winner.state == Wrestler.State.CELEBRATE else "DRAW"
+	var title := "%s WIN%s" % [team_name(winner), "" if tag_mode else "S"] \
+		if winner.state == Wrestler.State.CELEBRATE else "DRAW"
 	_end_menu = _menu(title, [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
 	_end_menu.visible = true
 	_end_menu.get_child(0).get_child(1).grab_focus()
