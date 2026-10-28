@@ -73,7 +73,7 @@ func _side(members: Array) -> void:
 		var w: Wrestler = members[i]
 		w.global_position = stage + Vector3((i - (members.size() - 1) * 0.5) * 1.2, 0, 0)
 		w._face(Vector3.BACK, 0.0, true)
-		w.entrance_pose("taunt")
+		w.entrance_pose(w.move_for("taunt"))
 	m.camera.follow(lead)
 	Pyro.fire(m, stage + Vector3(0, 0, 1.0), color)
 	m.excite(0.5, 0.8)

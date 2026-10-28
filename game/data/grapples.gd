@@ -25,12 +25,37 @@ const ALL := {
 	"hip_toss": {"damage": 7.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall"},
 	# tag team: two attackers share the suplex animation, side by side
 	"double_suplex": {"anim": "suplex", "damage": 22.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
-	# finishers (one per roster wrestler for now; CAW picks from these in M8)
+	# moveset alternatives (see Movesets.SLOTS)
+	"knee_lift": {"damage": 6.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_heavy", "reversal": 0.25},
+	"chop": {"damage": 5.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_light", "reversal": 0.25},
+	"arm_drag": {"damage": 6.0, "end_a": "idle", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"snap_suplex": {"damage": 12.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"gutwrench": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"neckbreaker": {"damage": 13.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"powerslam": {"damage": 15.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
+	"piledriver": {"damage": 17.0, "end_a": "getup", "end_d": "down", "sfx": "hit_heavy", "reversal": 0.3},
+	"back_suplex": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
+	"atomic_drop": {"damage": 9.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_heavy"},
+	"leg_drop": {"damage": 10.0, "end_a": "getup", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
+		"in_place": true},
+	"knee_drop": {"damage": 9.0, "end_a": "idle", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
+		"in_place": true},
+	# finishers: one per roster wrestler, any of them for a created wrestler
 	"thunder_bomb": {"name": "Thunder Bomb", "damage": 32.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
 	"volt_shock": {"name": "Volt Shock", "damage": 30.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
 	"iron_drop": {"name": "Iron Drop", "damage": 32.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"quetzal_rana": {"name": "Quetzal Rana", "damage": 30.0, "end_a": "getup", "end_d": "down",
+		"sfx": "finisher_impact", "finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"checkmate": {"name": "Checkmate", "damage": 32.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"wipeout": {"name": "Wipeout", "damage": 31.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
+		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"system_crash": {"name": "System Crash", "damage": 32.0, "end_a": "idle", "end_d": "down",
+		"sfx": "finisher_impact", "finisher": true, "reversal": 0.2, "down_extra": 1.5},
+	"supernova": {"name": "Supernova", "damage": 32.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
 }
 

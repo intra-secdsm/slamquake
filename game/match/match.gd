@@ -61,7 +61,8 @@ func _ready() -> void:
 		w.team = int(e.get("team", i % 2))
 		w.set_meta("roster", e["roster"])
 		w.display_name = entry["name"]
-		w.finisher = entry.get("finisher", "thunder_bomb")
+		w.moves = (entry.get("moves", {}) as Dictionary).duplicate()
+		w.stats = (entry.get("stats", Stats.defaults()) as Dictionary).duplicate()
 		w.ring = ring
 		if e["control"] == "human":
 			w.controller = PlayerController.new(e["slot"])

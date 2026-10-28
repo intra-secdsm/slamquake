@@ -42,13 +42,13 @@ func _new_match() -> void:
 	if _match:
 		_match.queue_free()
 	GameState.match_entrants = [
-		{"roster": randi_range(0, 2), "control": "cpu", "slot": 0, "difficulty": 3, "team": 0},
-		{"roster": randi_range(0, 2), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4), "team": 1},
+		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 0, "difficulty": 3, "team": 0},
+		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4), "team": 1},
 	]
 	var tag := DevTools.get_arg("mode", "mixed") == "tag" or (DevTools.get_arg("mode", "mixed") == "mixed" and randf() < 0.4)
 	if tag:
-		GameState.match_entrants.append({"roster": randi_range(0, 2), "control": "cpu", "slot": 2, "difficulty": 3, "team": 0})
-		GameState.match_entrants.append({"roster": randi_range(0, 2), "control": "cpu", "slot": 3,
+		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 2, "difficulty": 3, "team": 0})
+		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 3,
 			"difficulty": randi_range(1, 4), "team": 1})
 	GameState.rules = "nodq" if randf() < 0.4 else "normal"
 	_match = load("res://match/match.tscn").instantiate()
