@@ -5,8 +5,8 @@ GUARD_ARMS = sym({
     "clavicle.L": {"shrug": 6, "reach": 4},
     "upper_arm.L": {"raise": -42, "swing": 42, "twist": -30},
     "forearm.L": {"bend": 118},
-    "hand.L": {"bend": 15},
-    "fingers.L": {"curl": 95},
+    "hand.L": {"bend": -5},
+    "fingers.L": {"curl": 100},
     "thumb.L": {"curl": 45},
 })
 
@@ -94,4 +94,4 @@ punch = Anim("punch", [
     (0.55, STANCE),
 ], events={"hit": 0.22})
 
-ALL = [idle, walk, punch]
+ALL = [idle, walk, punch]  # punch = right cross

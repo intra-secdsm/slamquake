@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "file": "sfx/hit_light.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/hit_heavy.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/block.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/body_fall.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/whoosh.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/rope.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  }
+]

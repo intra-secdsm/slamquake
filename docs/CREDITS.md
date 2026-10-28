@@ -12,4 +12,4 @@ All wrestlers, names, gimmicks, and promotions in this game are original and fic
 Every audio file is listed with source URL, author, and license in
 `game/assets/audio/licenses.json`. Only CC0 or equivalently permissive audio is accepted.
 
-_(none yet)_
+Placeholder impact sounds in `game/assets/audio/sfx/` are synthesized by `tools/synth_sfx.py` (original, CC0).

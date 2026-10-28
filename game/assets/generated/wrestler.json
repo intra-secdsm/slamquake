@@ -1,15 +1,90 @@
 {
   "animations": {
+    "big_boot": {
+      "events": {
+        "hit": 0.3
+      },
+      "length": 0.75,
+      "loop": false
+    },
+    "block": {
+      "events": {},
+      "length": 1.0,
+      "loop": true
+    },
+    "clothesline": {
+      "events": {
+        "hit": 0.2
+      },
+      "length": 0.7,
+      "loop": false
+    },
+    "down": {
+      "events": {},
+      "length": 2.0,
+      "loop": true
+    },
+    "getup": {
+      "events": {},
+      "length": 1.2,
+      "loop": false
+    },
+    "groggy": {
+      "events": {},
+      "length": 1.6,
+      "loop": true
+    },
+    "hit_body": {
+      "events": {},
+      "length": 0.45,
+      "loop": false
+    },
+    "hit_head": {
+      "events": {},
+      "length": 0.4,
+      "loop": false
+    },
     "idle": {
       "events": {},
       "length": 1.8,
       "loop": true
+    },
+    "jab": {
+      "events": {
+        "hit": 0.1
+      },
+      "length": 0.36,
+      "loop": false
+    },
+    "knockdown": {
+      "events": {
+        "impact": 0.5
+      },
+      "length": 0.8,
+      "loop": false
     },
     "punch": {
       "events": {
         "hit": 0.22
       },
       "length": 0.55,
+      "loop": false
+    },
+    "rope_rebound": {
+      "events": {
+        "release": 0.26
+      },
+      "length": 0.42,
+      "loop": false
+    },
+    "run": {
+      "events": {},
+      "length": 0.64,
+      "loop": true
+    },
+    "taunt": {
+      "events": {},
+      "length": 1.6,
       "loop": false
     },
     "walk": {

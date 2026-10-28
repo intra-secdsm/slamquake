@@ -139,7 +139,7 @@ def mirror(pose):
 
 
 class Anim:
-    """keys: list of (time_seconds, pose). ground: keep the lowest foot on the floor."""
+    """keys: list of (time_seconds, pose). ground: keep the lowest body point on the floor."""
 
     def __init__(self, name, keys, loop=False, ground=True, events=None, fps=30):
         self.name, self.keys, self.loop = name, keys, loop
@@ -170,15 +170,24 @@ def apply_pose(armature, pose):
             pb.location = r.inverted() @ move_vector(vals["move"])
 
 
-def _sole_height(armature):
-    """Height of the lowest boot sole above z=0 in the current pose."""
+# (bone, position along bone, body surface radius) sampled to find what touches the floor
+_CONTACTS = [("head", 0.55, 0.11), ("neck", 0.5, 0.08), ("chest", 0.75, 0.13),
+             ("chest", 0.2, 0.13), ("spine", 0.3, 0.13), ("hips", 0.0, 0.16)]
+for _s in rig.SIDES:
+    _CONTACTS += [(f"upper_arm.{_s}", 0.0, 0.08), (f"forearm.{_s}", 0.0, 0.05),
+                  (f"hand.{_s}", 0.6, 0.045), (f"thigh.{_s}", 0.5, 0.09),
+                  (f"shin.{_s}", 0.0, 0.065), (f"foot.{_s}", 0.0, 0.10),
+                  (f"foot.{_s}", 1.0, 0.035), (f"toe.{_s}", 1.0, 0.025)]
+
+
+def _lowest_point(armature):
+    """Height of the lowest body surface point above z=0 in the current pose."""
     import bpy
     bpy.context.view_layer.update()
     lowest = math.inf
-    for side in rig.SIDES:
-        foot = armature.pose.bones[f"foot.{side}"]
-        toe = armature.pose.bones[f"toe.{side}"]
-        lowest = min(lowest, foot.head.z - 0.10, foot.tail.z - 0.035, toe.tail.z - 0.025)
+    for bone, t, radius in _CONTACTS:
+        pb = armature.pose.bones[bone]
+        lowest = min(lowest, pb.head.lerp(pb.tail, t).z - radius)
     return lowest
 
 
@@ -194,7 +203,7 @@ def bake(armature, anim):
         frame = round(t * anim.fps)
         apply_pose(armature, pose)
         if anim.ground:
-            dz = _sole_height(armature)
+            dz = _lowest_point(armature)
             hips = armature.pose.bones["hips"]
             r = _rest_quat(armature, "hips")
             hips.location = hips.location + r.inverted() @ Vector((0, 0, -dz))

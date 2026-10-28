@@ -12,12 +12,15 @@ config_version=5
 
 config/name="Wrestle (working title)"
 config/description="Original 90s-style arcade pro wrestling game."
-run/main_scene="res://match/showcase.tscn"
+run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
 DevTools="*res://core/dev_tools.gd"
+GameState="*res://core/game_state.gd"
+InputRouter="*res://core/input_router.gd"
+AudioDirector="*res://core/audio_director.gd"
 
 [display]
 
