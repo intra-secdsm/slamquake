@@ -25,6 +25,31 @@ godot -e --path game       # open the editor
 ```
 
 Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
+`tools/export.sh [Linux|Windows]` builds standalone executables into `build/`.
+
+## Controls
+
+| Action | Gamepad | Keyboard P1 | Keyboard P2 |
+|---|---|---|---|
+| Move | Left stick / D-pad | WASD | Arrows |
+| Punch (tap repeatedly for a combo) | X | J | Num 1 |
+| Kick (big boot; knocks down as a combo ender) | Y | I | Num 5 |
+| Grapple (coming in M3) | A | K | Num 2 |
+| Run (hold; bounce off the ropes; punch/kick while running = clothesline) | B | L | Num 3 |
+| Block (hold) | RB | Space | Num 0 |
+| Taunt | LB | U | Num 4 |
+| Get up faster when down | mash any button | | |
+| Pause | Start | Esc | Num Enter |
+
+Gamepad N always controls player N. F1 toggles the on-screen controls.
+
+## Testing
+
+```bash
+tools/test.sh                                                          # unit tests (GUT)
+godot --headless --fixed-fps 60 --path game res://dev/soak.tscn -- --seconds=300  # CPU-vs-CPU soak
+tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdown@0.4
+```
 
 ## Repository conventions
 
@@ -40,7 +65,7 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 |---|---|---|
 | M0 | Toolchain, repo, project skeleton, tests | ✅ |
 | M1 | Blender → Godot asset pipeline (rig, wrestler, ring) | ✅ |
-| M2 | Movement, strikes, camera, HUD | |
+| M2 | Movement, strikes, camera, HUD | ✅ |
 | M3 | Grapples, whips, rope rebounds, pinfalls: first full match | |
 | M4 | Top rope, apron, outside, chair, tables, ragdoll | |
 | M5 | Momentum, finishers, reversals, game feel, AI | |
