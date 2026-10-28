@@ -25,6 +25,7 @@ BLEND_SHAPES = {
     "muscle": dict(muscle=1.0),
     "gut": dict(gut=1.0),
     "kneepads": dict(kneepads=1.0),
+    "fem": dict(fem=1.0),
 }
 
 ARM_CHAIN = ["upper_arm", "forearm", "hand", "fingers"]
@@ -41,33 +42,48 @@ def _dir(bone):
 
 # ------------------------------------------------------------------ shapes
 
-def body_shape(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0):
+def body_shape(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0, fem=0.0):
+    """fem 0..1 morphs to a feminine build on the same skeleton: narrower shoulders and
+    ribcage, slimmer neck and arms, a defined waist above wider hips, fuller thighs and
+    glutes, a bust, smaller hands and feet, and a softer jaw and brow."""
     mt = 1 + (0.22 if mass > 0 else 0.15) * mass   # torso girth
     ml = 1 + (0.17 if mass > 0 else 0.14) * mass   # limb girth
     mu = 0.55 + 0.75 * muscle                      # muscle bulk
+    fs = 1 - 0.12 * fem                            # shoulder, ribcage and upper back width
+    fg = 1 - 0.14 * fem                            # neck and arm girth
+    fx = 1 - 0.08 * fem                            # hands and feet
     P = []
 
     def add(fn, bone, k=0.03, **kw):
         P.append(Prim(fn, bone, k, **kw))
 
+    def boot_cone(bone, a, b, r1, r2):
+        """A foot part shrunk by fx about its underside, so the sole stays on the floor."""
+        add(round_cone, bone, 0.03, a=_t(a - rig.Vector((0, 0, r1 * (1 - fx)))),
+            b=_t(b - rig.Vector((0, 0, r2 * (1 - fx)))), r1=r1 * fx, r2=r2 * fx)
+
     # torso
-    add(ellipsoid, "hips", 0.04, c=(0, 0.015, 1.00), radii=(0.165 * mt, 0.12 * mt, 0.125))
-    add(ellipsoid, "spine", 0.05, c=(0, 0.005, 1.16), radii=(0.15 * mt, 0.11 * mt, 0.15))
-    add(ellipsoid, "chest", 0.05, c=(0, 0.0, 1.36), radii=(0.18 * mt, 0.125 * mt, 0.17))
+    add(ellipsoid, "hips", 0.04, c=(0, 0.015, 1.00),
+        radii=((0.165 + 0.03 * fem) * mt, (0.12 + 0.008 * fem) * mt, 0.125))
+    add(ellipsoid, "spine", 0.05, c=(0, 0.005, 1.16),
+        radii=(0.15 * mt * (1 - 0.16 * fem), 0.11 * mt * (1 - 0.06 * fem), 0.15))
+    add(ellipsoid, "chest", 0.05, c=(0, 0.0, 1.36), radii=(0.18 * mt * fs, 0.125 * mt * fs, 0.17))
     add(ellipsoid, "chest", 0.04, c=(0, 0.005, 1.465),
-        radii=(0.2 * mt + 0.02 * muscle, 0.115 * mt, 0.10))
-    add(ellipsoid, "spine", 0.05, c=(0, -0.075 * mt, 1.22), radii=(0.10, 0.04, 0.13))
+        radii=((0.2 * mt + 0.02 * muscle) * fs, 0.115 * mt, 0.10))
+    add(ellipsoid, "spine", 0.05, c=(0, -0.075 * mt, 1.22), radii=(0.10 * fs, 0.04, 0.13))
     if gut > 0:
         add(ellipsoid, "spine", 0.07, c=(0, -0.05 - 0.06 * gut, 1.14),
             radii=(0.15 + 0.03 * gut, 0.08 + 0.07 * gut, 0.13 + 0.04 * gut))
     add(round_cone, "neck", 0.04, a=(0, 0.015, 1.49), b=(0, 0.0, 1.71),
-        r1=0.078 * (1 + 0.3 * muscle) * ml, r2=0.066 * ml)
+        r1=0.078 * (1 + 0.3 * muscle) * ml * fg, r2=0.066 * ml * (1 - 0.1 * fem))
 
     # head
     add(ellipsoid, "head", 0.03, c=(0, 0.012, 1.80), radii=(0.083, 0.098, 0.10))
     add(ellipsoid, "head", 0.03, c=(0, -0.035, 1.745), radii=(0.07, 0.07, 0.08))
-    add(ellipsoid, "head", 0.02, c=(0, -0.083, 1.69), radii=(0.032, 0.022, 0.028))
-    add(ellipsoid, "head", 0.02, c=(0, -0.086, 1.814), radii=(0.07, 0.024, 0.019))
+    add(ellipsoid, "head", 0.02, c=(0, -0.083, 1.69),
+        radii=(0.032 - 0.006 * fem, 0.022 - 0.003 * fem, 0.028 - 0.004 * fem))
+    add(ellipsoid, "head", 0.02, c=(0, -0.086 + 0.003 * fem, 1.814),
+        radii=(0.07, 0.024 - 0.003 * fem, 0.019 - 0.002 * fem))
     add(round_cone, "head", 0.012, a=(0, -0.092, 1.80), b=(0, -0.112, 1.758), r1=0.010, r2=0.016)
     add(ellipsoid, "head", 0.01, c=(0, -0.092, 1.727), radii=(0.026, 0.012, 0.010))
 
@@ -76,16 +92,23 @@ def body_shape(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0):
         b = lambda name: f"{name}.{side}"  # noqa: E731
 
         # torso muscles
-        add(ellipsoid, "hips", 0.04, c=(s * 0.075, 0.07, 0.935),
-            radii=(0.085 * ml, 0.075 * mt, 0.095))
+        add(ellipsoid, "hips", 0.04, c=(s * (0.075 + 0.01 * fem), 0.07 + 0.008 * fem, 0.935),
+            radii=((0.085 + 0.012 * fem) * ml, (0.075 + 0.014 * fem) * mt, 0.095 + 0.01 * fem))
         add(ellipsoid, "chest", 0.04, c=(s * 0.08, -0.075 * mt, 1.42),
             radii=(0.085 * mu, 0.045 * mu, 0.06 * mu))
-        add(ellipsoid, "chest", 0.05, c=(s * 0.13 * mt, 0.03, 1.33), radii=(0.06 * mu, 0.08, 0.12))
+        if fem > 0:
+            # bust: a teardrop from the upper chest to a fuller lower curve, rising out
+            # of the chest as fem grows
+            add(round_cone, "chest", 0.05, a=(s * 0.07, -0.02 - 0.03 * fem, 1.45),
+                b=(s * 0.085, -0.04 - 0.055 * fem, 1.36), r1=0.04, r2=0.05)
+        add(ellipsoid, "chest", 0.05, c=(s * 0.13 * mt * fs, 0.03, 1.33),
+            radii=(0.06 * mu * fs, 0.08 * fs, 0.12))
         add(ellipsoid, b("clavicle"), 0.05, c=(s * 0.07, 0.035, 1.53),
-            radii=(0.10 * mu, 0.06 * mu, 0.06 * mu))
+            radii=(0.10 * mu * fg, 0.06 * mu * fg, 0.06 * mu * fg))
 
         # face details
-        add(ellipsoid, "head", 0.025, c=(s * 0.048, -0.025, 1.705), radii=(0.032, 0.045, 0.03))
+        add(ellipsoid, "head", 0.025, c=(s * (0.048 - 0.004 * fem), -0.025, 1.705 + 0.003 * fem),
+            radii=(0.032 - 0.004 * fem, 0.045, 0.03 - 0.003 * fem))
         add(ellipsoid, "head", 0.02, c=(s * 0.045, -0.072, 1.765), radii=(0.028, 0.02, 0.02))
         add(ellipsoid, "head", 0.01, c=(s * 0.085, 0.008, 1.775), radii=(0.012, 0.024, 0.033))
         add(ellipsoid, "head", 0.006, c=(s * 0.032, -0.083, 1.797), radii=(0.019, 0.012, 0.009))
@@ -95,50 +118,54 @@ def body_shape(mass=0.0, muscle=0.4, gut=0.0, kneepads=0.0):
         wr = rig.tail(b("forearm"))
         ua, fa = _dir(b("upper_arm")), _dir(b("forearm"))
         add(ellipsoid, b("upper_arm"), 0.04, c=_t(sh + rig.Vector((s * 0.025, 0, -0.02))),
-            radii=(0.075 * mu * ml, 0.08 * mu, 0.075 * mu))
-        add(round_cone, b("upper_arm"), 0.03, a=_t(sh), b=_t(el), r1=0.06 * ml, r2=0.047 * ml)
+            radii=(0.075 * mu * ml * fg, 0.08 * mu * fg, 0.075 * mu * fg))
+        add(round_cone, b("upper_arm"), 0.03, a=_t(sh), b=_t(el),
+            r1=0.06 * ml * fg, r2=0.047 * ml * fg)
         add(ellipsoid, b("upper_arm"), 0.03,
             c=_t(rig.lerp(b("upper_arm"), 0.55) + rig.Vector((0, -0.022, 0))),
-            radii=(0.09, 0.042 * mu, 0.045 * mu), axis=ua)
+            radii=(0.09, 0.042 * mu * fg, 0.045 * mu * fg), axis=ua)
         add(ellipsoid, b("upper_arm"), 0.03,
             c=_t(rig.lerp(b("upper_arm"), 0.45) + rig.Vector((0, 0.025, 0))),
-            radii=(0.10, 0.04 * mu, 0.045 * mu), axis=ua)
-        add(round_cone, b("forearm"), 0.03, a=_t(el), b=_t(wr), r1=0.048 * ml, r2=0.036 * ml)
+            radii=(0.10, 0.04 * mu * fg, 0.045 * mu * fg), axis=ua)
+        add(round_cone, b("forearm"), 0.03, a=_t(el), b=_t(wr),
+            r1=0.048 * ml * fg, r2=0.036 * ml * fg)
         add(ellipsoid, b("forearm"), 0.03, c=_t(rig.lerp(b("forearm"), 0.3)),
-            radii=(0.09, 0.042 * mu, 0.045 * mu), axis=fa)
+            radii=(0.09, 0.042 * mu * fg, 0.045 * mu * fg), axis=fa)
         add(ellipsoid, b("hand"), 0.02, c=_t(rig.lerp(b("hand"), 0.5)),
-            radii=(0.05, 0.045, 0.024), axis=_dir(b("hand")))
+            radii=(0.05 * fx, 0.045 * fx, 0.024 * fx), axis=_dir(b("hand")))
         add(ellipsoid, b("fingers"), 0.015, c=_t(rig.lerp(b("fingers"), 0.45)),
-            radii=(0.05, 0.043, 0.022), axis=_dir(b("fingers")))
+            radii=(0.05 * fx, 0.043 * fx, 0.022 * fx), axis=_dir(b("fingers")))
         add(round_cone, b("thumb"), 0.012, a=_t(rig.head(b("thumb"))), b=_t(rig.tail(b("thumb"))),
-            r1=0.015, r2=0.012)
+            r1=0.015 * fx, r2=0.012 * fx)
 
         # leg
         hp, kn, an = rig.head(b("thigh")), rig.tail(b("thigh")), rig.tail(b("shin"))
         th, sn = _dir(b("thigh")), _dir(b("shin"))
-        add(round_cone, b("thigh"), 0.03, a=_t(hp), b=_t(kn), r1=0.10 * ml, r2=0.062 * ml)
+        # fem widens the hips from the outside, keeping the gap between the thighs
+        add(round_cone, b("thigh"), 0.03, a=_t(hp + rig.Vector((s * 0.012 * fem, 0, 0))), b=_t(kn),
+            r1=(0.10 + 0.008 * fem) * ml, r2=(0.062 - 0.004 * fem) * ml)
         add(ellipsoid, b("thigh"), 0.04,
             c=_t(rig.lerp(b("thigh"), 0.45) + rig.Vector((0, -0.03, 0))),
             radii=(0.2, 0.065 * mu * ml, 0.06 * mu), axis=th)
         add(ellipsoid, b("thigh"), 0.04,
             c=_t(rig.lerp(b("thigh"), 0.5) + rig.Vector((0, 0.03, 0))),
-            radii=(0.18, 0.06 * ml, 0.05 * mu), axis=th)
-        add(sphere, b("shin"), 0.03, c=_t(kn + rig.Vector((0, -0.01, 0))), r=0.058 * ml)
+            radii=(0.18, (0.06 + 0.006 * fem) * ml, 0.05 * mu), axis=th)
+        add(sphere, b("shin"), 0.03, c=_t(kn + rig.Vector((0, -0.01, 0))), r=0.058 * ml * (1 - 0.06 * fem))
         if kneepads > 0:
             add(ellipsoid, b("shin"), 0.015, c=_t(kn + rig.Vector((0, -0.022, 0.005))),
                 radii=(0.08, 0.072 * ml, 0.06), axis=sn)
-        add(round_cone, b("shin"), 0.03, a=_t(kn), b=_t(an), r1=0.055 * ml, r2=0.047)
+        add(round_cone, b("shin"), 0.03, a=_t(kn), b=_t(an),
+            r1=0.055 * ml * (1 - 0.06 * fem), r2=0.047 * fx)
         add(ellipsoid, b("shin"), 0.04,
             c=_t(rig.lerp(b("shin"), 0.28) + rig.Vector((0, 0.035, 0))),
             radii=(0.13, 0.05 * ml, 0.05 * mu), axis=sn)
         # boot shaft, foot, heel, toe cap
         add(round_cone, b("shin"), 0.02, a=_t(rig.lerp(b("shin"), 0.62)),
-            b=_t(an + rig.Vector((0, 0, -0.02))), r1=0.056, r2=0.058)
-        add(round_cone, b("foot"), 0.03, a=_t(an + rig.Vector((0, 0, -0.035))),
-            b=_t(rig.tail(b("foot")) + rig.Vector((0, 0, 0.005))), r1=0.056, r2=0.045)
-        add(sphere, b("foot"), 0.03, c=(s * 0.14, 0.035, 0.05), r=0.05)
-        add(round_cone, b("toe"), 0.03, a=_t(rig.head(b("toe"))), b=_t(rig.tail(b("toe"))),
-            r1=0.045, r2=0.035)
+            b=_t(an + rig.Vector((0, 0, -0.02))), r1=0.056 * fx, r2=0.058 * fx)
+        boot_cone(b("foot"), an + rig.Vector((0, 0, -0.035)),
+                  rig.tail(b("foot")) + rig.Vector((0, 0, 0.005)), 0.056, 0.045)
+        add(sphere, b("foot"), 0.03, c=(s * 0.14, 0.035, 0.05 * fx), r=0.05 * fx)
+        boot_cone(b("toe"), rig.head(b("toe")), rig.tail(b("toe")), 0.045, 0.035)
 
     # eye sockets, flat soles
     for side in rig.SIDES:
@@ -328,9 +355,14 @@ def build_body(armature, quick=False):
     _write_attributes(me, co, weights)
     me.materials.append(_material("body", (0.8, 0.55, 0.42)))
 
-    # blend shapes
+    # blend shapes: each vertex moves along its normal onto the variant surface. A few
+    # vertices next to decimation slivers have skewed normals and would slide along the
+    # surface into spikes; those move along the field gradient (the true normal) instead.
     ob.shape_key_add(name="Basis", from_mix=False)
     nrm = _normals(me)
+    grad = base.gradient(co)
+    grad /= np.maximum(np.linalg.norm(grad, axis=1, keepdims=True), 1e-8)
+    nrm = np.where(np.einsum("ij,ij->i", nrm, grad)[:, None] < 0.7, grad, nrm)
     for key, overrides in BLEND_SHAPES.items():
         variant = body_shape(**{**BASE_PARAMS, **overrides})
         p = co.copy()
