@@ -113,6 +113,7 @@ var _push := Vector3.ZERO        # decaying knockback / lunge velocity
 var _down_left := 0.0
 var _run_dir := Vector3.FORWARD
 var _auto_run := 0.0
+var _loose_rebounds := 0       # rebounds in a row without run held
 var _combo_hits := 0
 var _downed_for := 0.0           # time spent down since last standing (survives stomps and elbow drops)
 var _down_cap := DOWN_MAX
@@ -445,6 +446,7 @@ func _st_idle(delta: float) -> void:
 		_run_dir = mv.normalized() if mv.length() > 0.3 else facing()
 		_face(_run_dir, 0.0, true)
 		_auto_run = 0.0
+		_loose_rebounds = 0
 		_whipped = false
 		_enter(State.RUN)
 		return
@@ -553,7 +555,11 @@ func _st_rebound(_delta: float) -> void:
 			_rebounds += 1
 			_enter(State.WHIPPED)
 		else:
-			_auto_run = 0.9
+			# one bounce carries you back across even with run let go, but no more: on a
+			# diagonal the next rope comes before the run wears off, and you'd never stop
+			var held := controller != null and controller.run_held
+			_loose_rebounds = 0 if held else _loose_rebounds + 1
+			_auto_run = 0.9 if _loose_rebounds <= 1 else 0.0
 			_enter(State.RUN)
 
 
@@ -805,7 +811,7 @@ func _st_knockdown(_delta: float) -> void:
 
 
 func _go_down(extra: float = 0.0) -> void:
-	_down_left = DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5 + extra
+	_down_left = (DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5) * Stats.time_down(stats) + extra
 	_down_cap = maxf(DOWN_MAX, _down_left)
 	_enter(State.DOWN)
 
@@ -1487,6 +1493,11 @@ func _confine_to_ring() -> void:
 	var lim := _rope_limit() + extra
 	position.x = clampf(position.x, -lim, lim)
 	position.z = clampf(position.z, -lim, lim)
+	# never sink into the canvas: two bodies put on the same spot (a whip into an occupied
+	# corner) can make the physics push one of them down through it
+	if position.y < Ring.canvas_height() - 0.05:
+		position.y = Ring.canvas_height()
+		velocity.y = 0.0
 
 
 func _confine_outside() -> void:

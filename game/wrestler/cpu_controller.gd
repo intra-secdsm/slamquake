@@ -320,14 +320,32 @@ func _toward_ring(w: Wrestler) -> Vector3:
 	var other := 2 - axis
 	var v := Vector3.ZERO
 	v[axis] = -signf(p[axis])
-	# aim for the middle of a side: the steel steps sit near the corners
-	if absf(p[other]) > 1.2:
-		v[other] = -signf(p[other]) * 1.0
+	# aim for the middle of a side (the steel steps sit near the corners), or if the table
+	# stands there, for the gap past its far end from the steps
+	var aim := 0.0
+	var window := 1.2
+	if axis == 0 and _table_on_side(w, signf(p.x)):
+		aim = -signf(p.x) * 1.8
+		window = 0.4
+	if absf(p[other] - aim) > window:
+		v[other] = -signf(p[other] - aim)
 		if absf(p[axis]) < Ring.canvas_half() + 1.5:
-			v[axis] = signf(p[axis]) * 0.4      # step back out around the steps
+			v[axis] = signf(p[axis]) * 0.4      # step back out around the steps / table
 		else:
 			v[axis] *= 0.2
 	return v.normalized()
+
+
+## True if an unbroken table stands at ringside on the +x (1) or -x (-1) side. The steel
+## steps are at that side's +z end on +x and -z end on -x, so the free gap is at the other end.
+func _table_on_side(w: Wrestler, side: float) -> bool:
+	var m := w.get_parent() as Match
+	if m == null:
+		return false
+	for t: FoldingTable in m.tables:
+		if t.intact and signf(t.global_position.x) == side and absf(t.global_position.x) > Ring.canvas_half():
+			return true
+	return false
 
 
 ## Head out to the floor on the side nearest the opponent.
