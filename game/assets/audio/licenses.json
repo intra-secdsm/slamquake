@@ -61,5 +61,19 @@
     "author": "generated (this project)",
     "license": "CC0-1.0",
     "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/chair_hit.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/table_crash.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
   }
 ]

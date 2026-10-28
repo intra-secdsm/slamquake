@@ -1,20 +1,28 @@
 class_name Match
 extends Node3D
 ## Sets up and runs a match from GameState.match_entrants: wrestlers, referee, camera,
-## HUD and rules. 1v1, win by pinfall. Pins near the ropes are broken.
+## HUD and rules. 1v1. Win by pinfall (pins under the ropes are broken), or in normal
+## rules by count-out (20 while on the floor) or disqualification (weapon shots).
 
 signal match_ended(winner: Wrestler)
 
 const START_SPOTS := [Vector3(-1.5, 0, 0.5), Vector3(1.5, 0, -0.5), Vector3(-1.5, 0, -1.2), Vector3(1.5, 0, 1.2)]
-const ROPE_BREAK_MARGIN := 0.35
+const COUNT_OUT := 20
+var count_period := 1.0         ## seconds per count-out number
 
 var ring: Ring
 var camera: BroadcastCamera
 var hud: MatchHud
 var referee: Referee
 var wrestlers: Array[Wrestler] = []
-var winner: Wrestler
+var winner: Wrestler               ## set when the match ends (a wrestler even on a draw)
+var finish_reason := ""
+var _finished := false
+var tables: Array[FoldingTable] = []
+var chairs: Array[Chair] = []
 var _pin: Dictionary = {}          # {attacker, defender}
+var _count := 0
+var _count_t := 0.0
 var _pause_menu: Control
 var _end_menu: Control
 
@@ -50,6 +58,7 @@ func _ready() -> void:
 		w.landed_on_canvas.connect(_on_landed)
 		w.pin_started.connect(_on_pin_started)
 		w.kicked_out.connect(_on_kicked_out)
+		w.landed_outside.connect(_on_landed_outside)
 		wrestlers.append(w)
 		camera.targets.append(w)
 
@@ -58,6 +67,8 @@ func _ready() -> void:
 		for o in wrestlers:
 			if o != w:
 				w.opponents.append(o)
+
+	_place_props()
 
 	referee = Referee.new()
 	add_child(referee)
@@ -68,7 +79,8 @@ func _ready() -> void:
 	hud = MatchHud.new()
 	add_child(hud)
 	help.append("Tie-up (grapple): punch = headbutt / +dir body slam · kick = suplex / +dir DDT · run = Irish whip\n"
-		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN")
+		+ "Opponent down: grapple = pick up · punch = elbow drop · kick = stomp · block = PIN\n"
+		+ "Push into the ropes to roll out · grapple near a corner to climb · grapple near a chair to pick it up")
 	hud.setup(wrestlers, "\n".join(help))
 	AudioDirector.play("bell", camera.global_position + Vector3.FORWARD * 3.0, -4.0)
 	hud.banner("FIGHT!", 1.2)
@@ -79,8 +91,11 @@ func _ready() -> void:
 	_build_pause_menu()
 
 
-func _physics_process(_delta: float) -> void:
-	if get_tree().paused or _pin.is_empty():
+func _physics_process(delta: float) -> void:
+	if get_tree().paused or winner:
+		return
+	_count_out(delta)
+	if _pin.is_empty():
 		return
 	var d: Wrestler = _pin["defender"]
 	hud.show_kickout(d, d.kickout_progress())
@@ -124,6 +139,36 @@ func _on_kicked_out(defender: Wrestler) -> void:
 	referee.stop_count()
 
 
+## The referee's current count-out number (0 when nobody is outside).
+func outside_count() -> int:
+	return _count
+
+
+func _count_out(delta: float) -> void:
+	var out: Array[Wrestler] = []
+	for w in wrestlers:
+		if w.outside:
+			out.append(w)
+	if out.is_empty() or GameState.rules != "normal":
+		if _count > 0:
+			_count = 0
+			hud.show_count(0)
+			referee.stop_watching()
+		return
+	referee.watch_outside(out[0])
+	_count_t += delta
+	if _count_t >= count_period:
+		_count_t = 0.0
+		_count += 1
+		hud.show_count(_count)
+		if _count >= COUNT_OUT:
+			if out.size() == wrestlers.size():
+				_finish(null, null, "DOUBLE COUNT-OUT")
+			else:
+				var inside := wrestlers.filter(func(w: Wrestler) -> bool: return not w.outside)
+				_finish(inside[0], out[0], "COUNT-OUT")
+
+
 func _near_ropes(w: Wrestler) -> bool:
 	var lim := float(Ring.spec()["post_half"]) - Wrestler.ROPE_MARGIN
 	for p in [w.global_position, w.head_position()]:
@@ -132,16 +177,24 @@ func _near_ropes(w: Wrestler) -> bool:
 	return false
 
 
-func _finish(win: Wrestler, lose: Wrestler) -> void:
-	winner = win
+func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
+	winner = win if win else lose if lose else wrestlers[0]
+	finish_reason = reason if reason != "" else "PINFALL"
+	_finished = true
 	_pin = {}
 	hud.show_kickout(null, 0.0)
-	lose.lose()
-	win.win()
+	hud.show_count(0)
+	for w in wrestlers:
+		if w == win:
+			w.win()
+		else:
+			w.lose()
 	AudioDirector.play("bell_triple", camera.global_position + Vector3.FORWARD * 3.0, -2.0)
 	camera.shake(0.6)
+	if reason != "":
+		hud.banner(reason + "!", 1.2)
 	await get_tree().create_timer(1.2).timeout
-	hud.banner("WINNER: %s" % win.display_name.to_upper(), 3.5)
+	hud.banner("WINNER: %s" % win.display_name.to_upper() if win else "NO CONTEST", 3.5)
 	match_ended.emit(win)
 	await get_tree().create_timer(3.0).timeout
 	if is_inside_tree():
@@ -153,6 +206,8 @@ func _finish(win: Wrestler, lose: Wrestler) -> void:
 func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked: bool) -> void:
 	if blocked:
 		return
+	if move.get("weapon", false) and GameState.rules == "normal" and not winner:
+		_finish(victim, attacker, "DISQUALIFIED")
 	var heavy := float(move.get("damage", 0)) >= 8.0
 	var at := victim.body_center().lerp(attacker.global_position + Vector3.UP * 1.3, 0.25)
 	HitFx.spawn(self, at, heavy)
@@ -161,6 +216,31 @@ func _on_struck(attacker: Wrestler, victim: Wrestler, move: Dictionary, blocked:
 
 func _on_landed(_w: Wrestler) -> void:
 	camera.shake(0.8)
+
+
+func _on_landed_outside(w: Wrestler, at: Vector3) -> void:
+	for t in tables:
+		if t.intact and t.covers(at):
+			t.smash()
+			w._damage(10.0)
+			camera.shake(1.6)
+			hud.banner("THROUGH THE TABLE!", 1.6)
+			return
+
+
+func _place_props() -> void:
+	var ch := Ring.canvas_half()
+	var table := FoldingTable.new()
+	add_child(table)
+	table.global_position = Vector3(ch + 1.1, 0.03, 0.0)
+	table.rotation.y = PI / 2
+	tables.append(table)
+	var chair := Chair.new()
+	chair.add_to_group("chairs")
+	add_child(chair)
+	chair.global_position = Vector3(-(ch + 1.0), 0.05, 1.6)
+	chair.rotation.y = 0.6
+	chairs.append(chair)
 
 
 # ---------------------------------------------------------------- menus
@@ -177,7 +257,8 @@ func _build_pause_menu() -> void:
 
 
 func _show_end_menu() -> void:
-	_end_menu = _menu("%s WINS" % winner.display_name.to_upper(), [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
+	var title := "%s WINS" % winner.display_name.to_upper() if winner.state == Wrestler.State.CELEBRATE else "DRAW"
+	_end_menu = _menu(title, [["Rematch", _restart], ["Main Menu", _quit_to_menu]])
 	_end_menu.visible = true
 	_end_menu.get_child(0).get_child(1).grab_focus()
 

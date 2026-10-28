@@ -10,13 +10,17 @@ const STUCK_LIMIT := {  # max seconds allowed in one state
 	S.HELD: 3.5, S.PAIRED: 3.0, S.WHIPPED: 6.0, S.CORNER_HIT: 1.5, S.CORNERED: 4.0,
 	S.CORNER_EXIT: 1.5, S.STOMP: 1.5, S.DOWN_HIT: 1.5, S.PINNING: 6.0, S.PINNED: 6.0,
 	S.KICKOUT: 1.5, S.COVER_RELEASE: 1.5, S.STUN: 2.0,
+	S.EXIT_RING: 2.0, S.ENTER_RING: 2.0, S.FALL_OUT: 2.0, S.CLIMB: 2.0, S.PERCH: 7.0, S.CLIMB_DOWN: 1.5,
+	S.DIVE: 1.5, S.DIVE_LAND: 1.5, S.ITEM_PICKUP: 1.5, S.CHAIR_SWING: 1.5,
 }
 
 var _match: Match
 var _elapsed := 0.0
 var _match_time := 0.0
 var _limit := 120.0
-var _stats := {"matches": 0, "hits": 0, "blocks": 0, "knockdowns": 0, "rebounds": 0, "pins": 0, "kickouts": 0}
+var _stats := {"matches": 0, "hits": 0, "blocks": 0, "knockdowns": 0, "rebounds": 0, "pins": 0, "kickouts": 0,
+	"exits": 0, "tables": 0}
+var _endings := {}
 var _moves := {}
 var _durations: Array[float] = []
 var _failures: Array[String] = []
@@ -39,6 +43,7 @@ func _new_match() -> void:
 		{"roster": randi_range(0, 2), "control": "cpu", "slot": 0, "difficulty": 3},
 		{"roster": randi_range(0, 2), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 3)},
 	]
+	GameState.rules = "nodq" if randf() < 0.4 else "normal"
 	_match = load("res://match/match.tscn").instantiate()
 	add_child(_match)
 	_match_time = 0.0
@@ -47,6 +52,8 @@ func _new_match() -> void:
 	_match.match_ended.connect(func(_w: Wrestler) -> void:
 		_over = true
 		_stats["matches"] += 1
+		var key := "%s/%s" % [GameState.rules, _match.finish_reason]
+		_endings[key] = _endings.get(key, 0) + 1
 		_durations.append(_match_time))
 	for w in _match.wrestlers:
 		w.struck.connect(func(_a: Wrestler, _v: Wrestler, _m: Dictionary, blocked: bool) -> void:
@@ -58,6 +65,9 @@ func _new_match() -> void:
 			_moves[id] = _moves.get(id, 0) + 1
 			_last_move = id)
 		_was_rebound[w] = false
+		w.landed_outside.connect(func(_v: Wrestler, _at: Vector3) -> void: _stats["exits"] += 1)
+	for t in _match.tables:
+		t.broken.connect(func(_t: FoldingTable) -> void: _stats["tables"] += 1)
 
 
 func _physics_process(delta: float) -> void:
@@ -70,8 +80,8 @@ func _physics_process(delta: float) -> void:
 			_new_match()
 	else:
 		_check()
-		if _match_time > 240.0:
-			_failures.append("match did not finish within 240s")
+		if _match_time > (300.0 if GameState.rules == "normal" else 420.0):
+			_failures.append("match did not finish in time (%s rules)" % GameState.rules)
 			_new_match()
 	if _elapsed >= _limit:
 		_finish()
@@ -81,8 +91,9 @@ func _check() -> void:
 	for w in _match.wrestlers:
 		var limit: float = STUCK_LIMIT.get(w.state, 10.0)
 		if w.state_time > limit:
-			_failures.append("%s stuck in %s for %.1fs at t=%.1f" % [
-				w.display_name, S.keys()[w.state], w.state_time, _elapsed])
+			_failures.append("%s stuck in %s for %.1fs at t=%.1f at %s outside=%s (opponent %s at %s)" % [
+				w.display_name, S.keys()[w.state], w.state_time, _elapsed, w.global_position.snapped(Vector3.ONE * 0.01),
+				w.outside, S.keys()[w.opponents[0].state], w.opponents[0].global_position.snapped(Vector3.ONE * 0.01)])
 			w.state_time = 0.0
 		var reb := w.state == S.REBOUND
 		if reb and not _was_rebound[w]:
@@ -90,10 +101,14 @@ func _check() -> void:
 		_was_rebound[w] = reb
 		# leaning into the ropes / slumping in a corner put the body centre just past the posts
 		var edge: float = Ring.spec()["post_half"] + 0.1
-		if w.state not in [S.PAIRED, S.HELD, S.TIEUP, S.PINNING, S.PINNED] \
+		if w.outside:
+			edge = Ring.spec()["barricade_half"]
+		if w.state not in Wrestler.SCRIPTED \
 				and (absf(w.global_position.x) > edge or absf(w.global_position.z) > edge):
-			_failures.append("%s left the ring at t=%.1f (%s)" % [w.display_name, _elapsed, S.keys()[w.state]])
-		if w.global_position.y < Ring.canvas_height() - 0.2:
+			_failures.append("%s out of bounds at t=%.1f (%s, outside=%s, at %s, last move %s)" % [w.display_name, _elapsed,
+				S.keys()[w.state], w.outside, w.global_position.snapped(Vector3.ONE * 0.01), _last_move])
+		var floor_y := 0.0 if w.outside else Ring.canvas_height()
+		if w.state not in Wrestler.SCRIPTED and w.global_position.y < floor_y - 0.2:
 			_failures.append("%s fell through the canvas at t=%.1f (%s at %s, last move %s, partner state %s)" % [
 				w.display_name, _elapsed, S.keys()[w.state], w.global_position, _last_move,
 				S.keys()[w.partner.state] if w.partner else "-"])
@@ -106,6 +121,7 @@ func _finish() -> void:
 		avg += d / maxf(1, _durations.size())
 	print("SOAK %.0fs: %s avg match %.0fs" % [_elapsed, _stats, avg])
 	print("MOVES ", _moves)
+	print("ENDINGS ", _endings, " longest %.0fs" % (_durations.max() if not _durations.is_empty() else 0.0))
 	if _stats["hits"] == 0 or _stats["matches"] == 0:
 		_failures.append("no complete matches: %s" % _stats)
 	for f in _failures.slice(0, 20):

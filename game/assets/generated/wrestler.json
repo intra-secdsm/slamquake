@@ -136,6 +136,113 @@
         "yaw": 180
       }
     },
+    "chair_hold": {
+      "events": {},
+      "length": 1.8,
+      "loop": true,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "chair_swing": {
+      "events": {
+        "hit": 0.4
+      },
+      "length": 0.9,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "chair_walk": {
+      "events": {},
+      "length": 1.0,
+      "loop": true,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "climb_corner": {
+      "events": {},
+      "length": 1.15,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          1.25,
+          0.35
+        ],
+        "yaw": 180
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "climb_down": {
+      "events": {},
+      "length": 0.6,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          -1.25,
+          0.35
+        ],
+        "yaw": 180
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
     "clothesline": {
       "events": {
         "hit": 0.2
@@ -354,6 +461,69 @@
         "yaw": 180
       }
     },
+    "dive_elbow": {
+      "events": {},
+      "length": 1.0,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "dive_land": {
+      "events": {},
+      "length": 0.8,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "dive_splash": {
+      "events": {},
+      "length": 1.0,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
     "down": {
       "events": {},
       "length": 2.0,
@@ -440,6 +610,71 @@
           0.5
         ],
         "yaw": 90
+      }
+    },
+    "enter_ring": {
+      "events": {},
+      "length": 1.3,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          1.15,
+          1.25
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "exit_ring": {
+      "events": {},
+      "length": 1.3,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          -1.15,
+          1.25
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "fall_over_ropes": {
+      "events": {
+        "impact": 0.75
+      },
+      "length": 1.1,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          -1.15,
+          -1.6
+        ],
+        "yaw": 180
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
       }
     },
     "german_a": {
@@ -660,6 +895,29 @@
         "yaw": 0.0
       }
     },
+    "item_pickup": {
+      "events": {
+        "grab": 0.3
+      },
+      "length": 0.65,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
     "jab": {
       "events": {
         "hit": 0.1
@@ -710,6 +968,27 @@
       },
       "length": 0.8,
       "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "perch": {
+      "events": {},
+      "length": 1.4,
+      "loop": true,
       "root_end": {
         "pos": [
           0.0,
@@ -857,6 +1136,52 @@
           0.0
         ],
         "yaw": 0.0
+      }
+    },
+    "rope_toss_a": {
+      "events": {
+        "impact": 0.75
+      },
+      "length": 1.1,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.0
+      }
+    },
+    "rope_toss_d": {
+      "events": {
+        "impact": 0.75
+      },
+      "length": 1.1,
+      "loop": false,
+      "root_end": {
+        "pos": [
+          0.0,
+          -1.15,
+          2.8
+        ],
+        "yaw": 0
+      },
+      "root_start": {
+        "pos": [
+          0.0,
+          0.0,
+          0.8
+        ],
+        "yaw": 180
       }
     },
     "run": {
