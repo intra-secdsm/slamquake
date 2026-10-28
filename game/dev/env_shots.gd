@@ -1,6 +1,7 @@
 extends Node
 ## Dev tool: stage environment situations for screenshots.
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=chair|perch|table|outside|dive|finisher|reversal [--move=iron_drop]
+##   [--roster=A,B] picks the two wrestlers (Roster indices), e.g. for --setup=entrance
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 900 --setup=move --move=<id> [--at=SECONDS] [--cam=side|front|match]
 ##     performs any moveset move, finisher or taunt (see Movesets); --at pauses that long after the
 ##     move starts and takes the screenshot there. tools/move_sheet.sh makes a contact sheet of these.
@@ -36,6 +37,11 @@ func _ready() -> void:
 		{"roster": 0, "control": "cpu", "slot": 0, "difficulty": 0},
 		{"roster": 2, "control": "cpu", "slot": 1, "difficulty": 0},
 	]
+	if DevTools.has_arg("roster"):
+		# --roster=3,5 picks who is in the match (Roster indices)
+		var picks := DevTools.get_arg("roster").split(",")
+		for i in mini(picks.size(), 2):
+			GameState.match_entrants[i]["roster"] = int(picks[i])
 	if Settings.entrances:
 		for e in GameState.match_entrants:
 			e["difficulty"] = 2
