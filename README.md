@@ -19,10 +19,10 @@ turnbuckle slams, folding chairs and tables. Includes 1v1 arcade/practice, 2v2 t
 
 ```bash
 git lfs install            # once per machine (tools/setup.sh does this too)
-git clone https://github.com/intra-secdsm/slamquake.git
-cd wrestle
+git clone https://github.com/intra-secdsm/slamquake.git slamquake
+cd slamquake
 tools/setup.sh             # installs pinned Godot, Blender, git-lfs into ~/.local (no sudo)
-tools/build_assets.sh      # regenerate models/animations with Blender (see docs/ART_PIPELINE.md)
+tools/build_assets.sh      # optional: regenerate models/animations with Blender (see docs/ART_PIPELINE.md)
 tools/test.sh              # run the test suite headlessly
 godot --path game          # play
 godot -e --path game       # open the editor
@@ -124,6 +124,9 @@ tools/test.sh                                                          # unit te
 godot --headless --fixed-fps 60 --path game res://dev/soak.tscn -- --seconds=300  # CPU-vs-CPU soak
 tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdown@0.4
 ```
+
+On GitHub, CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) runs the unit tests and a
+10-minute (simulated) soak with the pinned Godot on every push to `main` and every pull request.
 
 ## Repository conventions
 
