@@ -1,8 +1,8 @@
 extends GutTest
 ## Roster data, movesets, stats, look serialisation and created-wrestler storage.
 
-const TEST_PATH := "user://test_created_wrestlers.json"
-
+# per process, so test runs in parallel checkouts never share the file
+var TEST_PATH := "user://test_created_wrestlers_%d.json" % OS.get_process_id()
 var _saved_path := ""
 
 
