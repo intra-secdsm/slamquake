@@ -199,3 +199,24 @@ M3 is the key gate: the core grapple and animation approach must feel good there
     - Mister Midnight: win the World title.
     - Hall of Fame: three successful World title defences.
   - **Tests:** a GUT pre-run hook points every save file at throwaway test files.
+- **M10 (v1.0-rc1):**
+  - **Name:** *SLAMQUAKE! Suplex Spectacular!* (working name). The box art is in `docs/art/`, and its artwork is the boot splash. Saves live in the user folder `slamquake`, which stays the same if the name changes. Saves from the old "Wrestle (working title)" folder are copied over once.
+  - **Entrances:** a wide stage shot that shows the pyro and titantron, then a looser follow down the aisle.
+  - **Performance:**
+    - Measured with the dev `--fps` hook (GPU time, worst frames, and what was added on a slow frame). At 1080p on an RTX 4090, the GPU averages about 3.7 ms per frame, and headless CPU frames stay under 10 ms.
+    - Hit effects share their meshes and materials, and are drawn once while the match loads. Fresh ones on every hit had caused ~80 ms hitches.
+    - The Graphics option has High and Low. Low turns off volumetric haze, SSAO and MSAA, and renders 3D at 75% with FSR.
+  - **Balance:**
+    - Measured with `soak.tscn --balance`: equal CPUs, about 420 singles per run, with per-wrestler records and damage by move.
+    - Stat effects per point:
+      - power: ±4% damage dealt
+      - toughness: ∓3.5% damage taken, ∓4% kick-out difficulty
+      - speed: ±6% movement, ∓10% time down (capped at 4.5 s), ±12% reversal window and CPU reversal rate
+      - charisma: ±20% momentum
+    - The roster win spread narrowed from 23–74% to about 33–61%. High-flyers are still the weakest as CPUs.
+  - **Bugs found by long soaks:**
+    - stalls against the ringside table and steel steps
+    - endless diagonal runs
+    - chair swings at nobody
+    - sinking into the canvas
+    - throws landing inside the barricade
