@@ -1,6 +1,10 @@
 extends Node
 ## Dev tool: stage environment situations for screenshots.
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=chair|perch|table|outside|dive|finisher|reversal [--move=iron_drop]
+##   [--roster=A,B] picks the two wrestlers (Roster indices), e.g. for --setup=entrance
+##   tools/screenshot.sh res://dev/env_shots.tscn out.png 900 --setup=move --move=<id> [--at=SECONDS] [--cam=side|front|match]
+##     performs any moveset move, finisher or taunt (see Movesets); --at pauses that long after the
+##     move starts and takes the screenshot there. tools/move_sheet.sh makes a contact sheet of these.
 
 class Hold:
 	extends WrestlerController
@@ -21,6 +25,9 @@ class Hold:
 		press = ""
 
 var m: Match
+var _cam: Camera3D
+var _cam_subjects: Array[Wrestler] = []
+var _cam_side := 1.0
 
 
 func _ready() -> void:
@@ -30,6 +37,11 @@ func _ready() -> void:
 		{"roster": 0, "control": "cpu", "slot": 0, "difficulty": 0},
 		{"roster": 2, "control": "cpu", "slot": 1, "difficulty": 0},
 	]
+	if DevTools.has_arg("roster"):
+		# --roster=3,5 picks who is in the match (Roster indices)
+		var picks := DevTools.get_arg("roster").split(",")
+		for i in mini(picks.size(), 2):
+			GameState.match_entrants[i]["roster"] = int(picks[i])
 	if Settings.entrances:
 		for e in GameState.match_entrants:
 			e["difficulty"] = 2
@@ -154,9 +166,119 @@ func _ready() -> void:
 			(a2.controller as Hold).press = "grapple"
 		"entrance":
 			pass
+		"move":
+			await _stage_move(a, b, ca, DevTools.get_arg("move", "body_slam"))
 		"outside":
 			a.global_position = Vector3(-1.0, y, lim - 0.2)
 			a.rotation.y = 0
 			b.global_position = Vector3(0.5, 0.05, Ring.canvas_half() + 1.2)
 			b.outside = true
 			ca.hold_move = Vector3.BACK
+
+
+func _stage_move(a: Wrestler, b: Wrestler, ca: Hold, id: String) -> void:
+	var y := Ring.canvas_height()
+	var slot := Movesets.slot_of(id)
+	if slot != "":
+		a.moves[slot] = id
+	if not Movesets.is_available(id):
+		push_warning("env_shots: %s has no animation in this build" % id)
+	a.global_position = Vector3(-0.45, y, -0.6)
+	b.global_position = Vector3(0.45, y, -0.6)
+	a.rotation.y = PI / 2
+	b.rotation.y = -PI / 2
+	_watch([a, b], DevTools.get_arg("cam", "side"))
+	if DevTools.get_arg("cam", "side") != "match":
+		m.hud.visible = false
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	match slot:
+		"kick":
+			a._start_strike(id)
+		"running":
+			a.global_position.x = -2.4
+			b.global_position.x = 0.9
+			a.rotation.y = PI / 2
+			ca.hold_move = Vector3.RIGHT
+			ca.hold_run = true
+			for i in 240:
+				await get_tree().physics_frame
+				if a.global_position.x > b.global_position.x - 1.7:
+					break
+			ca.press = "punch"
+			ca.hold_run = false
+			ca.hold_move = Vector3.ZERO
+			await get_tree().physics_frame
+		"back_grapple":
+			b.rotation.y = PI / 2       # facing away
+			await get_tree().physics_frame
+			a._start_paired(id, b)
+		"ground_punch":
+			b._go_down(30.0)
+			await get_tree().create_timer(0.8).timeout
+			a._start_paired(id, b)
+		"dive_punch", "dive_kick":
+			var c := Ring.corner(3)
+			a.global_position = Vector3(c.x - 0.6, y, c.z + 0.6)
+			a.rotation.y = atan2(1, -1)
+			b.global_position = Vector3(c.x - 2.2, y, c.z + 2.0)
+			b._go_down(30.0)
+			await get_tree().physics_frame
+			ca.press = "grapple"
+			for i in 240:
+				await get_tree().physics_frame
+				if a.state == Wrestler.State.PERCH and a.state_time > 0.2:
+					break
+			ca.press = "punch"
+			for i in 30:
+				await get_tree().physics_frame
+				if a.state == Wrestler.State.DIVE:
+					break
+		"taunt":
+			a._enter(Wrestler.State.TAUNT)
+		_:
+			# tie-up moves and finishers (anything paired)
+			a._start_tieup(b)
+			await get_tree().create_timer(0.35).timeout
+			a._start_paired(id, b)
+	if DevTools.has_arg("at"):
+		await get_tree().create_timer(float(DevTools.get_arg("at"))).timeout
+		get_tree().paused = true
+		DevTools.capture_soon()
+
+
+## A fixed-height dev camera inside the ropes that keeps these wrestlers in view
+## ("side": profile view, "front": from behind the defender, "match": the broadcast camera).
+func _watch(subjects: Array[Wrestler], mode: String) -> void:
+	if mode == "match":
+		return
+	_cam_subjects = subjects
+	_cam_side = 1.0 if mode == "side" else -1.0
+	_cam = Camera3D.new()
+	_cam.fov = 62
+	add_child(_cam)
+	_cam.process_mode = Node.PROCESS_MODE_ALWAYS
+	_update_cam(1.0)
+
+
+func _process(delta: float) -> void:
+	if _cam:
+		_update_cam(minf(1.0, delta * 4.0))
+
+
+func _update_cam(weight: float) -> void:
+	var mid := Vector3.ZERO
+	for w in _cam_subjects:
+		mid += w.global_position
+	mid /= maxf(1.0, _cam_subjects.size())
+	var y := Ring.canvas_height()
+	var target := Vector3(mid.x, y + 0.85, mid.z)
+	var eye := target + (Vector3(0, 0.4, 3.0) if _cam_side > 0.0 else Vector3(3.0, 0.4, 0.0))
+	# stay inside the ropes so they never block the view
+	var lim := float(Ring.spec()["post_half"]) - 0.25
+	eye.x = clampf(eye.x, -lim, lim)
+	eye.z = clampf(eye.z, -lim, lim)
+	var want := Transform3D(Basis.IDENTITY, eye).looking_at(target)
+	_cam.global_transform = _cam.global_transform.interpolate_with(want, weight) if weight < 1.0 else want
+	_cam.current = true
+

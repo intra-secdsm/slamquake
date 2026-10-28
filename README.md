@@ -33,18 +33,21 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 |---|---|---|---|
 | Move | Left stick / D-pad | WASD | Arrows |
 | Punch (tap repeatedly for a combo) | X | J | Num 1 |
-| Kick (big boot; knocks down as a combo ender) | Y | I | Num 5 |
-| Grapple: tie-up; from behind = German suplex; vs a running opponent = back body drop | A | K | Num 2 |
-| Run (hold; bounce off the ropes; punch/kick while running = clothesline) | B | L | Num 3 |
+| Kick (each wrestler's own kick; knocks down as a combo ender) | Y | I | Num 5 |
+| Grapple: tie-up; from behind = their back grapple; vs a running opponent = back body drop | A | K | Num 2 |
+| Run (hold; bounce off the ropes; punch/kick while running = their running attack) | B | L | Num 3 |
 | Block (hold); **tap** just before a hit = parry, as a move starts on you = reversal; next to a downed opponent = **pin** | RB | Space | Num 0 |
 | Taunt (builds momentum); with a SPECIAL = **finisher** | LB | U | Num 4 |
 | Get up faster / kick out of a pin | mash any button | | |
 | Pause | Start | Esc | Num Enter |
-| Menus: move / change · confirm · back | D-pad or stick · A · B | Arrows · Enter · Esc | |
+| Menus: move / change · confirm · back · change tab | D-pad or stick · A · B · LB/RB | Arrows · Enter · Esc · Q/E | |
 
-**In a tie-up:** punch = headbutt, punch + direction = body slam, kick = suplex,
-kick + direction = DDT, run (+ direction) = Irish whip into the ropes or a corner, grapple = shove away.
-**Opponent down:** grapple = pick up, punch = elbow drop, kick = stomp, block = pin.
+**Every wrestler has their own moveset** (pause → *Move List* shows it, and the on-screen help names
+your moves). **In a tie-up:** punch, punch + direction, kick and kick + direction are four moves of
+the wrestler's own (e.g. Thunder Mack: headbutt, body slam, vertical suplex, piledriver); run
+(+ direction) = Irish whip into the ropes or a corner, grapple = shove away.
+**Opponent down:** grapple = pick up, punch = their ground move (elbow/leg/knee drop), kick = stomp,
+block = pin.
 Whipped opponents coming back off the ropes can be clotheslined (punch/kick) or back body dropped (grapple).
 **Using the ring:** hold a direction into the ropes for a moment to roll out to the floor (and into the
 apron to roll back in). Whip an opponent toward nearby ropes from a tie-up to toss them over the top;
@@ -56,8 +59,7 @@ Land someone on the ringside table to smash it.
 **Momentum and finishers:** landing offence, kicking out, parries, reversals and taunts fill the
 momentum meter under your health bar (you also gain a little from taking punishment). A full meter
 banks a **SPECIAL** for 20 seconds: you glow gold and hit a little harder. Press taunt in a tie-up, or
-next to a dazed opponent, to hit your finisher (Thunder Mack: Thunder Bomb, Zip Volta: Volt Shock,
-Bruno Kessler: Iron Drop). Kicking out right after a finisher is much harder.
+next to a dazed opponent, to hit your finisher. Kicking out right after a finisher is much harder.
 **Reversals:** tap block just before a strike lands to parry it and leave the striker open; tap block
 just as a tie-up move (or finisher, or Irish whip) starts on you to reverse it into a hip toss (or a
 reversed whip). Mashing block never works: a press right after another one doesn't count.
@@ -75,6 +77,27 @@ Win by pinfall (pins under the ropes are broken). Normal rules add a 20-count co
 disqualification for chair shots; No DQ allows anything and has no count-outs.
 
 Gamepad N always controls player N. F1 toggles the on-screen controls.
+
+**The roster** (all original characters). Stats are power / speed / toughness / charisma (1–5, the
+same 12-point budget for everyone); the CPU fights each one in character.
+
+| Wrestler | Style | Finisher | Theme |
+|---|---|---|---|
+| Thunder Mack — "The Storm from South Street" | brawler | Thunder Bomb (powerbomb) | hard rock |
+| Zip Volta — "100,000 Volts of High-Flying" | high-flyer | Volt Shock (jawbreaker) | electro |
+| Bruno Kessler — "The Iron Wall" | powerhouse | Iron Drop (chokeslam) | heavy and slow |
+| Quetzal Neón — "The Emerald Wings of Lucha" | high-flyer (masked) | Quetzal Rana (hurricanrana) | latin party rock |
+| Silas Wren — "The Grandmaster of the Mat" | technician | Checkmate (exploder suplex) | baroque rock |
+| Kai Breakwater — "Hang Ten. Hit Hard." | showman | Wipeout (spear) | surf rock |
+| Overclock — "The Cybernetic Superstar" | powerhouse | System Crash (spinebuster) | industrial techno |
+| Nova Reyes — "Brighter Than a Thousand Suns" | high-flyer | Supernova (fireman's-carry driver) | eurodance |
+
+**Create-a-Wrestler** (main menu): start fresh or copy a roster wrestler, then edit the profile
+(name, nickname, colour, entrance theme, pyro, titantron), body (type, height, build, muscle, gut,
+skin), head (hair, facial hair, face paint, masks), attire (trunks, tights, singlet, top, patterns,
+boots, pads, tattoos), every move slot including the finisher, and stats. The wrestler is previewed
+live, moves play as you pick them, and names can be entered with a pad. Created wrestlers are saved
+to `user://created_wrestlers.json` and can be picked anywhere a roster wrestler can.
 
 **Presentation:** matches open with entrances (theme music, pyro, the titantron, a walk down the ramp);
 press any button to skip. Pinfall wins get a slow-motion VHS instant replay of the finish. **Options**
@@ -109,6 +132,6 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M5 | Momentum, finishers, reversals, game feel, AI | ✅ |
 | M6 | Tag team, 4 local players | ✅ |
 | M7 | Arena, crowd, entrances, menus, audio | ✅ |
-| M8 | Roster of 8 + Create-a-Wrestler | |
+| M8 | Roster of 8 + Create-a-Wrestler | ✅ |
 | M9 | Career mode | |
 | M10 | Polish & release builds | |

@@ -165,3 +165,12 @@ M3 is the key gate: the core grapple and animation approach must feel good there
   - **Replay:** an 8 s transform/animation ring buffer replays the last finisher, or the run-up to the pin, through a VHS shader.
   - **Front end:** title screen, setup panel with live 3D picks, options, and a CRT shader.
   - **Audio:** synthesized music and crowd loops. Settings drive the audio buses.
+- **M8 (v0.8):**
+  - **Movesets** (`game/data/movesets.gd`): 12 slots (kick, running attack, four tie-up moves, from behind, on a downed opponent, two top-rope dives, taunt, finisher) with 2–8 options each. `Wrestler.move_for(slot)` falls back to the slot default if a move isn't built.
+  - **Stats** (`game/data/stats.gd`): power, speed, toughness, charisma (1–5, budget 12) scale damage dealt and taken, kick-outs, movement and momentum.
+  - **Roster:** 8 wrestlers, each with a finisher, signature taunt, theme, pyro style, titantron motif and CPU fighting style (brawler, high-flyer, powerhouse, technician, showman).
+  - **New moves:** 5 finishers, 5 strikes, 10 tie-up/back moves, 2 ground moves, 2 dives and 7 taunts.
+  - **Looks:** a feminine body blend shape; shader-painted masks, face paint, singlets, tops, trunk patterns, bare feet and tattoos; 5 more hair styles and 4 facial-hair meshes.
+  - **Create-a-Wrestler** (`game/ui/caw_editor.gd`, `game/data/caw_store.gd`): a tabbed editor with a live preview; saves to `user://created_wrestlers.json`.
+  - **Also:** a pause-menu move list, big-move callouts, and 8 new synthesized themes (5 for the roster, 3 for created wrestlers).
+  - **Deferred:** submissions, apron moves and ragdoll.

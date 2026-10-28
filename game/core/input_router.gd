@@ -49,6 +49,9 @@ func _ready() -> void:
 	# Godot's menu actions only map the D-pad and stick by default: A confirms, B backs out
 	_add_ui_button("ui_accept", JOY_BUTTON_A)
 	_add_ui_button("ui_cancel", JOY_BUTTON_B)
+	# shoulder buttons flip between pages/tabs (create-a-wrestler)
+	_add_ui_button("ui_page_up", JOY_BUTTON_LEFT_SHOULDER)
+	_add_ui_button("ui_page_down", JOY_BUTTON_RIGHT_SHOULDER)
 
 
 ## Any gamepad's button triggers this UI action.

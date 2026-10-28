@@ -95,7 +95,14 @@ var outside := false             ## on the arena floor rather than in the ring
 var held_item: Chair
 var momentum := 0.0
 var special_left := 0.0          ## seconds left on a banked SPECIAL (finisher available)
-var finisher := "thunder_bomb"
+## slot -> move id (see Movesets); resolved against the built animations when the match starts
+var moves: Dictionary = Movesets.defaults()
+var stats: Dictionary = Stats.defaults()   ## power / speed / toughness / charisma, 1-5
+var finisher: String:
+	get:
+		return moves.get("finisher", "thunder_bomb")
+	set(value):
+		moves["finisher"] = value
 
 var _move: Dictionary = {}
 var _hit_done := false
@@ -165,6 +172,8 @@ func _ready() -> void:
 	model = WrestlerModel.new()
 	model.look = look if look else WrestlerLook.new()
 	add_child(model)
+	moves = Movesets.resolve(moves)
+	stats = Stats.sanitize(stats)
 	_enter(State.IDLE)
 
 
@@ -172,6 +181,14 @@ func _ready() -> void:
 
 func facing() -> Vector3:
 	return global_basis.z
+
+
+## The move this wrestler does in a slot (the slot default if it isn't available).
+func move_for(slot_id: String) -> String:
+	var id := String(moves.get(slot_id, ""))
+	if id == "" or not Movesets.is_available(id):
+		id = Movesets.slot(slot_id)["default"]
+	return id
 
 
 func model_scale() -> float:
@@ -393,7 +410,8 @@ func _enter(s: State, blend: float = -1.0) -> void:
 		State.CHAIR_SWING: ["chair_swing", 0.06], State.PARRY: ["parry", 0.04], State.APRON: ["apron_wait", 0.2],
 	}
 	if anims.has(s):
-		_play(anims[s][0], anims[s][1] if blend < 0.0 else blend, true)
+		var anim_name: String = move_for("taunt") if s == State.TAUNT or s == State.CELEBRATE else anims[s][0]
+		_play(anim_name, anims[s][1] if blend < 0.0 else blend, true)
 
 
 func _st_idle(delta: float) -> void:
@@ -431,8 +449,8 @@ func _st_idle(delta: float) -> void:
 		_enter(State.RUN)
 		return
 
-	velocity.x = mv.x * WALK_SPEED + _push.x
-	velocity.z = mv.z * WALK_SPEED + _push.z
+	velocity.x = mv.x * WALK_SPEED * _speed() + _push.x
+	velocity.z = mv.z * WALK_SPEED * _speed() + _push.z
 	var target := nearest_opponent()
 	if mv.length() > 0.15:
 		_face(mv, delta * 10.0)
@@ -441,7 +459,7 @@ func _st_idle(delta: float) -> void:
 	var speed := Vector2(velocity.x, velocity.z).length()
 	if speed > 0.3:
 		_play("walk", 0.2)
-		model.anim_player.speed_scale = clampf(speed / WALK_SPEED, 0.5, 1.3)
+		model.anim_player.speed_scale = clampf(speed / (WALK_SPEED * _speed()), 0.5, 1.3)
 	else:
 		_play("idle", 0.25)
 		model.anim_player.speed_scale = 1.0
@@ -462,7 +480,7 @@ func _try_action(action: String) -> bool:
 	match action:
 		"punch":
 			if downed:
-				_start_paired("elbow_drop", target)
+				_start_paired(move_for("ground_punch"), target)
 			else:
 				_start_strike("jab")
 			return true
@@ -472,7 +490,7 @@ func _try_action(action: String) -> bool:
 				partner = target
 				_enter(State.STOMP)
 			else:
-				_start_strike("big_boot")
+				_start_strike(move_for("kick"))
 			return true
 		"grapple":
 			_try_grapple(target)
@@ -492,17 +510,17 @@ func _st_run(delta: float) -> void:
 		var ang := _run_dir.signed_angle_to(desired, Vector3.UP)
 		_run_dir = _run_dir.rotated(Vector3.UP, clampf(ang, -RUN_STEER * delta, RUN_STEER * delta))
 	_face(_run_dir, 0.0, true)
-	velocity.x = _run_dir.x * RUN_SPEED
-	velocity.z = _run_dir.z * RUN_SPEED
+	velocity.x = _run_dir.x * RUN_SPEED * _speed()
+	velocity.z = _run_dir.z * RUN_SPEED * _speed()
 
 	var action := _take_buffered()
 	if action == "punch" or action == "kick":
-		_start_strike("clothesline")
+		_start_strike(move_for("running"))
 		return
 	_auto_run -= delta
 	var held := c != null and c.run_held
 	if not held and _auto_run <= 0.0 and state_time > 0.25:
-		_push = _run_dir * RUN_SPEED * 0.5
+		_push = _run_dir * RUN_SPEED * _speed() * 0.5
 		_enter(State.IDLE)
 		return
 	if _hits_ropes():
@@ -547,8 +565,8 @@ func _start_strike(id: String) -> void:
 		var to := flat_dir_to(target)
 		if facing().angle_to(to) < deg_to_rad(110):
 			_face(to, 0.0, true)
-	if id == "clothesline":
-		_push = _run_dir * RUN_SPEED * 0.7
+	if _move.get("running", false):
+		_push = _run_dir * RUN_SPEED * _speed() * 0.7
 	state = State.STRIKE
 	state_time = 0.0
 	invulnerable = false
@@ -566,11 +584,16 @@ func _st_strike(_delta: float) -> void:
 	# combo chain: past the cancel point a punch continues the chain, a kick finishes it
 	if _move.has("next") and state_time >= float(_move.get("cancel", 99.0)) \
 			and (_buffered == "punch" or _buffered == "kick"):
-		var next: String = _move["next"] if _take_buffered() == "punch" else "big_boot"
+		var next: String = _move["next"] if _take_buffered() == "punch" else move_for("kick")
 		_start_strike(next)
 		return
 	if state_time >= float(_move["length"]) - 0.04:
-		_enter(State.IDLE)
+		if _move.get("end", "") == "down":
+			# dropkicks and crossbodies leave the attacker on the mat for a moment
+			_go_down()
+			_down_left = 0.35
+		else:
+			_enter(State.IDLE)
 
 
 func _resolve_hit() -> void:
@@ -601,6 +624,8 @@ func _resolve_hit() -> void:
 func gain_momentum(amount: float) -> void:
 	if match_over or (amount > 0.0 and special_left > 0.0):
 		return
+	if amount > 0.0:
+		amount *= Stats.momentum(stats)
 	momentum = clampf(momentum + amount, 0.0, MOMENTUM_MAX)
 	if momentum >= MOMENTUM_MAX and special_left <= 0.0:
 		special_left = SPECIAL_TIME
@@ -613,13 +638,13 @@ func has_special() -> bool:
 	return special_left > 0.0
 
 
-## Damage multiplier from momentum: up to +15% on a full meter.
+## Damage multiplier from power and momentum (up to +15% on a full meter).
 func damage_boost() -> float:
-	return 1.0 + 0.15 * momentum / MOMENTUM_MAX
+	return (1.0 + 0.15 * momentum / MOMENTUM_MAX) * Stats.damage_dealt(stats)
 
 
 func finisher_name() -> String:
-	return String(Grapples.ALL[finisher].get("name", finisher)).to_upper()
+	return Movesets.move_name(move_for("finisher")).to_upper()
 
 
 ## A finisher can be hit straight onto a dazed opponent, or from a tie-up.
@@ -633,13 +658,13 @@ func _start_finisher(t: Wrestler) -> void:
 	special_left = 0.0
 	momentum = 0.0
 	momentum_changed.emit(self)
-	_start_paired(finisher, t)
+	_start_paired(move_for("finisher"), t)
 
 
 func _st_taunt(_delta: float) -> void:
 	velocity.x = _push.x
 	velocity.z = _push.z
-	if state_time >= _anim_length("taunt") - 0.02:
+	if state_time >= _anim_length(move_for("taunt")) - 0.02:
 		gain_momentum(15.0)    # playing to the crowd pays off, if you get away with it
 		_enter(State.IDLE)
 
@@ -809,7 +834,7 @@ func _st_getup(_delta: float) -> void:
 
 func _st_celebrate(_delta: float) -> void:
 	_hold_still()
-	if state_time >= _anim_length("taunt"):
+	if state_time >= _anim_length(move_for("taunt")):
 		_enter(State.CELEBRATE)
 
 
@@ -835,7 +860,7 @@ func _try_grapple(target: Wrestler) -> void:
 			and target.outside == outside:
 		_face(to, 0.0, true)
 		if target.facing().dot(to) > 0.3 and target.state != State.CORNERED:
-			_start_paired("german", target)
+			_start_paired(move_for("back_grapple"), target)
 		else:
 			_start_tieup(target)
 	elif not _try_pick_up_item() and not _try_climb():
@@ -883,9 +908,9 @@ func _st_tieup(_delta: float) -> void:
 	elif c and c.taunt and has_special():
 		_start_finisher(partner)
 	elif action == "punch":
-		_start_paired("body_slam" if has_dir else "headbutt", partner)
+		_start_paired(move_for("tieup_punch_dir" if has_dir else "tieup_punch"), partner)
 	elif action == "kick":
-		_start_paired("ddt" if has_dir else "suplex", partner)
+		_start_paired(move_for("tieup_kick_dir" if has_dir else "tieup_kick"), partner)
 	elif action == "grapple" or state_time > TIEUP_TIMEOUT:
 		_break_tieup()
 
@@ -1145,7 +1170,8 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 			partner = other
 			_set_solid(false)
 			_kickout_have = 0
-			_kickout_need = int(2 + pow(1.0 - health / MAX_HEALTH, 1.8) * 18.0 + (16.0 if health <= 0.0 else 0.0))
+			_kickout_need = int((2 + pow(1.0 - health / MAX_HEALTH, 1.8) * 18.0 + (16.0 if health <= 0.0 else 0.0))
+				* Stats.kickout_ease(stats))
 			if _finisher_hit > 0.0:
 				_kickout_need = int(_kickout_need * 1.6) + 6
 			_enter(State.PINNED, 0.0)
@@ -1350,8 +1376,12 @@ func restore_health() -> void:
 
 func _damage(amount: float) -> void:
 	if not infinite_health:
-		health = maxf(0.0, health - amount * DAMAGE_SCALE)
+		health = maxf(0.0, health - amount * DAMAGE_SCALE * Stats.damage_taken(stats))
 	health_changed.emit(self)
+
+
+func _speed() -> float:
+	return Stats.speed(stats)
 
 
 func _hold_still() -> void:
@@ -1649,7 +1679,7 @@ func _start_dive(button: String) -> void:
 		var flat_d := Vector2(t.global_position.x - global_position.x, t.global_position.z - global_position.z).length()
 		if t.is_down() and flat_d < 5.5:
 			to = t.body_center()
-			_dive_kind = "elbow" if button == "punch" else "splash"
+			_dive_kind = move_for("dive_punch" if button == "punch" else "dive_kick")
 		elif t.is_standing() and t.state not in BUSY and flat_d < 5.5:
 			to = t.global_position
 			_dive_kind = "crossbody"
@@ -1660,8 +1690,8 @@ func _start_dive(button: String) -> void:
 	_dive_time = 0.42 + Vector2(to.x - global_position.x, to.z - global_position.z).length() * 0.06
 	state = State.DIVE
 	state_time = 0.0
-	_play("dive_elbow" if _dive_kind == "elbow" else "dive_splash", 0.1, true)
-	move_performed.emit(self, "dive_" + _dive_kind)
+	_play(_dive_kind if _dive_kind.begins_with("dive_") else "dive_splash", 0.1, true)
+	move_performed.emit(self, _dive_kind if _dive_kind.begins_with("dive_") else "dive_" + _dive_kind)
 
 
 func _st_dive(_delta: float) -> void:
@@ -1677,9 +1707,9 @@ func _st_dive(_delta: float) -> void:
 				t.receive_strike(self, {"id": "crossbody", "damage": 13.0, "knockdown": true, "knockback": 1.5,
 					"hitstop": 0.12, "sfx": "hit_heavy", "region": "body"})
 				hit = true
-		"elbow", "splash":
+		_ when _dive_kind.begins_with("dive_"):
 			if t and t.is_down() and t.distance_to_body(_dive_to) < 0.9:
-				t.receive_ground_hit(self, 16.0 if _dive_kind == "elbow" else 14.0)
+				t.receive_ground_hit(self, float(Movesets.DIVE_DAMAGE.get(_dive_kind, 14.0)))
 				hit = true
 	if not hit:
 		_damage(7.0)
@@ -1724,8 +1754,8 @@ func _st_item_pickup(_delta: float) -> void:
 
 
 func _idle_with_item(mv: Vector3, delta: float) -> void:
-	velocity.x = mv.x * WALK_SPEED * 0.85 + _push.x
-	velocity.z = mv.z * WALK_SPEED * 0.85 + _push.z
+	velocity.x = mv.x * WALK_SPEED * _speed() * 0.85 + _push.x
+	velocity.z = mv.z * WALK_SPEED * _speed() * 0.85 + _push.z
 	var target := nearest_opponent()
 	if mv.length() > 0.15:
 		_face(mv, delta * 10.0)

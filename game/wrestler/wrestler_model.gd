@@ -21,6 +21,7 @@ var skeleton: Skeleton3D
 var anim_player: AnimationPlayer
 var body: MeshInstance3D
 var _hair: Dictionary = {}   # style -> MeshInstance3D
+var _facial: Dictionary = {}   # facial hair style -> MeshInstance3D
 var _body_mat := ShaderMaterial.new()
 var _hair_mat := ShaderMaterial.new()
 var _eyes_mat := ShaderMaterial.new()
@@ -45,6 +46,9 @@ func _ready() -> void:
 		elif n.begins_with("hair_"):
 			_hair[n.trim_prefix("hair_")] = mi
 			mi.material_override = _hair_mat
+		elif n.begins_with("facial_"):
+			_facial[n.trim_prefix("facial_")] = mi
+			mi.material_override = _hair_mat
 	_setup_animations()
 	if look == null:
 		look = WrestlerLook.new()
@@ -64,8 +68,13 @@ func apply_look() -> void:
 	_set_blend("muscle", l.muscle)
 	_set_blend("gut", l.gut)
 	_set_blend("kneepads", 1.0 if l.kneepads else 0.0)
+	_set_blend("fem", l.feminine)
 	for style in _hair:
 		_hair[style].visible = style == l.hair_style
+	# a full mask covers the face, beard and all
+	var face_hidden := l.mask != "none" and l.mask != "half"
+	for style in _facial:
+		_facial[style].visible = style == l.facial_hair and not face_hidden
 
 	var m := _body_mat
 	m.set_shader_parameter("skin_color", l.skin_color)
@@ -86,8 +95,28 @@ func apply_look() -> void:
 	m.set_shader_parameter("shirt_color", l.shirt_color)
 	m.set_shader_parameter("stripe_color", l.stripe_color)
 	m.set_shader_parameter("stripes", float(l.stripes))
+	m.set_shader_parameter("feminine", l.feminine)
+	m.set_shader_parameter("boots", 1.0 if l.boots else 0.0)
+	m.set_shader_parameter("singlet", 1.0 if l.singlet else 0.0)
+	m.set_shader_parameter("top", 1.0 if l.top else 0.0)
+	m.set_shader_parameter("top_color", l.top_color)
+	m.set_shader_parameter("pattern_style", _choice(l, "pattern"))
+	m.set_shader_parameter("pattern_color", l.pattern_color)
+	m.set_shader_parameter("paint_style", _choice(l, "face_paint"))
+	m.set_shader_parameter("paint_color", l.paint_color)
+	m.set_shader_parameter("paint_color2", l.paint_color2)
+	m.set_shader_parameter("mask_style", _choice(l, "mask"))
+	m.set_shader_parameter("mask_color", l.mask_color)
+	m.set_shader_parameter("mask_trim", l.mask_trim)
+	m.set_shader_parameter("tattoo_style", _choice(l, "tattoo"))
+	m.set_shader_parameter("tattoo_color", l.tattoo_color)
 	_hair_mat.set_shader_parameter("hair_color", l.hair_color)
 	_eyes_mat.set_shader_parameter("iris_color", l.eye_color)
+
+
+## Index of an enum property's value (0 = the first choice, usually "none").
+static func _choice(l: WrestlerLook, property: String) -> int:
+	return maxi(0, l.choices(property).find(String(l.get(property))))
 
 
 func play(anim_name: StringName, blend: float = 0.15, speed: float = 1.0) -> void:

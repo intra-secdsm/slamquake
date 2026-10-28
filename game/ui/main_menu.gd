@@ -22,6 +22,8 @@ var _setup: Control
 var _options: Control
 var _opt_rows: Array[Button] = []
 var _start_button: Button
+var _caw: CawEditor
+var _pick_info: Label
 
 
 func _ready() -> void:
@@ -84,6 +86,11 @@ func _ready() -> void:
 	start.pressed.connect(_start)
 	box.add_child(start)
 	_start_button = start
+	var caw := Button.new()
+	caw.text = "Create-a-Wrestler"
+	caw.add_theme_font_size_override("font_size", 24)
+	caw.pressed.connect(_show_caw)
+	box.add_child(caw)
 	var opts := Button.new()
 	opts.text = "Options"
 	opts.add_theme_font_size_override("font_size", 24)
@@ -95,6 +102,12 @@ func _ready() -> void:
 	quit.pressed.connect(get_tree().quit)
 	box.add_child(quit)
 
+	_pick_info = Label.new()
+	_pick_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pick_info.add_theme_font_size_override("font_size", 20)
+	_pick_info.add_theme_color_override("font_color", Color("ffd400"))
+	_pick_info.custom_minimum_size = Vector2(680, 30)
+	box.add_child(_pick_info)
 	var hint := Label.new()
 	hint.text = "↑↓ select   ←→ change   Enter / A: start"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -103,12 +116,23 @@ func _ready() -> void:
 
 	_options = _build_options()
 	layer.add_child(_options)
+	_caw = CawEditor.new()
+	_caw.stage = _stage
+	layer.add_child(_caw)
+	_caw.closed.connect(_on_caw_closed)
+	for i in ROWS:
+		_rows[i].focus_entered.connect(_show_pick_info.bind(i))
 	_mode = clampi(int(DevTools.get_arg("menu_mode", "0")), 0, MODES.size() - 1)   # dev: screenshot a mode
 	_refresh()
 	if DevTools.has_arg("menu_mode"):
 		_show_setup()
 	elif DevTools.get_arg("menu", "") == "options":
 		_show_options()
+	elif DevTools.get_arg("menu", "") == "caw":          # dev: --menu=caw [--caw_tab=N]
+		_show_caw()
+		if DevTools.has_arg("caw_tab"):
+			_caw._copy_roster()
+			_caw._set_tab(int(DevTools.get_arg("caw_tab")))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -121,9 +145,44 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _show_caw() -> void:
+	_title_screen.visible = false
+	_setup.visible = false
+	_options.visible = false
+	_caw.open()
+
+
+func _on_caw_closed() -> void:
+	# created wrestlers may have come or gone: keep every pick in range
+	var n := Roster.all().size()
+	_p1 = mini(_p1, n - 1)
+	_p2 = mini(_p2, n - 1)
+	for i in _picks.size():
+		_picks[i] = mini(_picks[i], n - 1)
+	_refresh()
+	_show_setup()
+
+
+## Under the rows: who the focused pick is (nickname, finisher), so 8+ wrestlers are easy to tell apart.
+func _show_pick_info(row: int) -> void:
+	var pick := -1
+	if _mode == TAG and row >= 1 and row <= 4:
+		pick = _picks[row - 1]
+	elif _mode != TAG and (row == 1 or row == 2):
+		pick = _p1 if row == 1 else _p2
+	if pick < 0:
+		_pick_info.text = ""
+		return
+	var e := Roster.get_entry(pick)
+	var fin := Movesets.move_name(Movesets.resolve(e.get("moves", {}))["finisher"])
+	_pick_info.text = "%s%s  ·  Finisher: %s" % [e.get("tagline", ""), "  ·  CREATED" if e.get("caw", false) else "",
+		fin]
+
+
 func _show_setup() -> void:
 	_title_screen.visible = false
 	_options.visible = false
+	_caw.visible = false
 	_setup.visible = true
 	_start_button.grab_focus()
 
@@ -342,6 +401,7 @@ func _on_row_input(event: InputEvent, row: int) -> void:
 	if step == 0:
 		return
 	_change(row, step)
+	_show_pick_info(row)
 	get_viewport().set_input_as_handled()
 
 
@@ -351,6 +411,7 @@ func _on_row_pressed(row: int) -> void:
 		_refresh()
 		return
 	_change(row, 1)
+	_show_pick_info(row)
 
 
 func _change(row: int, step: int) -> void:

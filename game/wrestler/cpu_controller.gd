@@ -17,8 +17,21 @@ const PROFILES := [
 		"reverse": 0.4, "parry": 0.25, "taunt": 0.12, "save": 0.8},
 ]
 
+## Fighting styles shift preferences on top of the difficulty profile (skill stays with difficulty):
+## multipliers for profile keys, plus "climb" (top-rope dives), "chair" (grabbing a weapon outside)
+## and "power" (tie-up power moves over strikes).
+const STYLES := {
+	"brawler": {"heavy": 1.4, "grapple": 0.85, "chair": 2.5, "climb": 0.7},
+	"highflyer": {"run": 2.2, "climb": 2.5, "grapple": 0.85, "power": 0.7},
+	"powerhouse": {"grapple": 1.35, "run": 0.4, "power": 1.6, "climb": 0.4},
+	"technician": {"grapple": 1.3, "reverse": 1.3, "parry": 1.3, "taunt": 0.6},
+	"showman": {"taunt": 2.5, "run": 1.4},
+}
+
 var difficulty: int
+var style: String
 var profile: Dictionary
+var _mods: Dictionary
 var _think := 0.0
 var _plan_time := 0.0
 var _outside_time := 0.0
@@ -46,9 +59,14 @@ var _save_rolled := false
 var _save_ok := false
 
 
-func _init(level: int, seed_value: int = 0) -> void:
+func _init(level: int, seed_value: int = 0, fighting_style: String = "") -> void:
 	difficulty = clampi(level, 0, PROFILES.size() - 1)
-	profile = PROFILES[difficulty]
+	style = fighting_style if STYLES.has(fighting_style) else ""
+	_mods = STYLES.get(style, {})
+	profile = PROFILES[difficulty].duplicate()
+	for key in _mods:
+		if profile.has(key):
+			profile[key] = minf(float(profile[key]) * float(_mods[key]), 0.95)
 	_rng.seed = seed_value if seed_value != 0 else randi()
 
 
@@ -198,7 +216,8 @@ func _environment(w: Wrestler, target: Wrestler, dist: float, dir: Vector3, delt
 	if w.outside:
 		_chair_cooldown -= delta
 		var chair := _free_chair(w, 4.0) if _chair_cooldown <= 0.0 else null
-		var want_chair := chair != null and _rng.randf() < (0.5 if GameState.rules != "normal" else 0.04) * delta * 4.0
+		var want_chair := chair != null and _rng.randf() < (0.5 if GameState.rules != "normal" else 0.04) * delta * 4.0 \
+			* float(_mods.get("chair", 1.0))
 		if chair and (want_chair or _chair_chase > 0.0):
 			_chair_chase += delta
 			var to_chair := chair.global_position - w.global_position
@@ -239,7 +258,7 @@ func _environment(w: Wrestler, target: Wrestler, dist: float, dir: Vector3, delt
 		_climb_think -= delta
 		if _climb_corner < 0 and _climb_think <= 0.0:
 			_climb_think = 1.0
-			if _rng.randf() < 0.12 * (1.0 + difficulty * 0.3):
+			if _rng.randf() < 0.12 * (1.0 + difficulty * 0.3) * float(_mods.get("climb", 1.0)):
 				_climb_corner = _corner_near(target.body_center(), 3.6)
 		if _climb_corner >= 0:
 			var spot := w._corner_spot(_climb_corner)
@@ -394,8 +413,10 @@ func _tieup(w: Wrestler, target: Wrestler) -> void:
 		punch = true
 		move = Vector3.ZERO if _rng.randf() < 0.4 else w.facing()
 	elif r < (0.85 if hurt else 0.7):
+		# power moves (direction + kick) are the powerhouse's bread and butter
 		kick = true
-		move = Vector3.ZERO if _rng.randf() < 0.5 else w.facing()
+		var power := 0.5 * float(_mods.get("power", 1.0))
+		move = w.facing() if _rng.randf() < power else Vector3.ZERO
 	else:
 		punch = true
 
@@ -529,3 +550,22 @@ func _tag_team(w: Wrestler, target: Wrestler, delta: float) -> bool:
 			_tag_cooldown = 6.0
 		return true
 	return false
+
+
+## The style for a roster entry: its own, or one read from a created wrestler's stats.
+static func style_for(entry: Dictionary) -> String:
+	if STYLES.has(entry.get("style", "")):
+		return entry["style"]
+	var st: Dictionary = entry.get("stats", {})
+	var power := int(st.get("power", 3))
+	var speed := int(st.get("speed", 3))
+	var charisma := int(st.get("charisma", 3))
+	if speed >= 4 and speed > power:
+		return "highflyer"
+	if power >= 4 and power > speed:
+		return "powerhouse" if int(st.get("toughness", 3)) >= 3 else "brawler"
+	if charisma >= 4:
+		return "showman"
+	if int(st.get("toughness", 3)) >= 4:
+		return "technician"
+	return "brawler"

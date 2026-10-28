@@ -2,6 +2,7 @@ extends Node
 ## Headless CPU-vs-CPU soak test. Plays complete matches back to back as fast as
 ## possible and fails if a wrestler gets stuck, leaves the ring, or nothing happens.
 ##   godot --headless --fixed-fps 60 --path game res://dev/soak.tscn -- --seconds=300
+##     [--mode=singles|tag|mixed] [--moves=slot:id,slot:id]  (--moves forces those moves on everyone)
 
 const S := Wrestler.State
 const STUCK_LIMIT := {  # max seconds allowed in one state
@@ -42,13 +43,13 @@ func _new_match() -> void:
 	if _match:
 		_match.queue_free()
 	GameState.match_entrants = [
-		{"roster": randi_range(0, 2), "control": "cpu", "slot": 0, "difficulty": 3, "team": 0},
-		{"roster": randi_range(0, 2), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4), "team": 1},
+		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 0, "difficulty": 3, "team": 0},
+		{"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 1, "difficulty": randi_range(1, 4), "team": 1},
 	]
 	var tag := DevTools.get_arg("mode", "mixed") == "tag" or (DevTools.get_arg("mode", "mixed") == "mixed" and randf() < 0.4)
 	if tag:
-		GameState.match_entrants.append({"roster": randi_range(0, 2), "control": "cpu", "slot": 2, "difficulty": 3, "team": 0})
-		GameState.match_entrants.append({"roster": randi_range(0, 2), "control": "cpu", "slot": 3,
+		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 2, "difficulty": 3, "team": 0})
+		GameState.match_entrants.append({"roster": randi_range(0, Roster.builtin().size() - 1), "control": "cpu", "slot": 3,
 			"difficulty": randi_range(1, 4), "team": 1})
 	GameState.rules = "nodq" if randf() < 0.4 else "normal"
 	_match = load("res://match/match.tscn").instantiate()
@@ -62,7 +63,14 @@ func _new_match() -> void:
 		var key := "%s%s/%s" % ["tag-" if _match.tag_mode else "", GameState.rules, _match.finish_reason]
 		_endings[key] = _endings.get(key, 0) + 1
 		_durations.append(_match_time))
+	var forced := {}
+	for pair in DevTools.get_arg("moves", "").split(",", false):
+		var kv := pair.split(":")
+		if kv.size() == 2:
+			forced[kv[0]] = kv[1]
 	for w in _match.wrestlers:
+		for slot_id in forced:
+			w.moves[slot_id] = forced[slot_id]
 		w.struck.connect(func(_a: Wrestler, _v: Wrestler, _m: Dictionary, blocked: bool) -> void:
 			_stats["blocks" if blocked else "hits"] += 1)
 		w.knocked_down.connect(func(_v: Wrestler) -> void: _stats["knockdowns"] += 1)

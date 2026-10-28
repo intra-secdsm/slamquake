@@ -35,6 +35,13 @@ func _measure_fps(seconds: float) -> void:
 	get_tree().quit()
 
 
+## Take the --screenshot a few frames from now instead of after --frames
+## (e.g. once a dev scene has paused on the moment it wants to show).
+func capture_soon(frames: int = 3) -> void:
+	if _shot_path != "":
+		_frames_left = frames
+
+
 func get_arg(key: String, default: String = "") -> String:
 	return _args.get(key, default)
 

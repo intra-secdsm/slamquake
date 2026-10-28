@@ -65,7 +65,8 @@ func _side(members: Array) -> void:
 	var entry := Roster.get_entry(_roster_index(lead))
 	var names := " & ".join(members.map(func(w: Wrestler) -> String: return w.display_name.to_upper()))
 	var color: Color = entry.get("color", Color("ff2bd6"))
-	m.arena.titantron.show_text(names, "", color, color.lerp(Color.WHITE, 0.4))
+	var pyro: String = entry.get("pyro", "classic")
+	m.arena.titantron.show_text(names, "", color, color.lerp(Color.WHITE, 0.4), entry.get("motif", "grid"))
 	m.hud.name_card(names, entry.get("tagline", "") if members.size() == 1 else "TAG TEAM")
 	AudioDirector.play_music(entry.get("theme", "theme_thunder"), 0.3)
 	var stage := Arena.stage_point()
@@ -73,11 +74,11 @@ func _side(members: Array) -> void:
 		var w: Wrestler = members[i]
 		w.global_position = stage + Vector3((i - (members.size() - 1) * 0.5) * 1.2, 0, 0)
 		w._face(Vector3.BACK, 0.0, true)
-		w.entrance_pose("taunt")
+		w.entrance_pose(w.move_for("taunt"))
 	m.camera.follow(lead)
-	Pyro.fire(m, stage + Vector3(0, 0, 1.0), color)
+	Pyro.fire(m, stage + Vector3(0, 0, 1.0), color, pyro)
 	m.excite(0.5, 0.8)
-	if await _wait(POSE_TIME):
+	if await _wait(maxf(POSE_TIME, Pyro.show_time(pyro))):
 		return
 	# walk the path together, side by side
 	var targets: Array[Array] = []
