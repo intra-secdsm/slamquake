@@ -27,6 +27,27 @@ func test_crowd_fills_the_stands() -> void:
 	assert_eq(m.arena.heat, 1.0, "heat is clamped")
 
 
+func test_low_graphics_drops_haze_and_ssao() -> void:
+	await _start_match()
+	var env: Environment = (m.find_children("*", "WorldEnvironment", true, false)[0] as WorldEnvironment).environment
+	assert_true(env.volumetric_fog_enabled and env.ssao_enabled)
+	Settings.high_quality = false
+	Settings.apply()
+	assert_false(env.volumetric_fog_enabled or env.ssao_enabled, "low quality turns them off at once")
+	Settings.high_quality = true
+	Settings.apply()
+	assert_true(env.volumetric_fog_enabled and env.ssao_enabled)
+
+
+func test_hit_effects_share_their_meshes() -> void:
+	await _start_match()
+	var a := HitFx.spawn(m, Vector3.ZERO, true)
+	var b := HitFx.spawn(m, Vector3.ZERO, false)
+	var mesh := func(fx: HitFx) -> Mesh: return (fx.get_child(0) as CPUParticles3D).mesh
+	assert_same(mesh.call(a), mesh.call(b), "one spray mesh for every hit (new ones stalled the renderer)")
+	assert_same(mesh.call(HitFx.dust(m, Vector3.ZERO)), mesh.call(HitFx.dust(m, Vector3.ZERO)))
+
+
 func test_every_roster_theme_exists() -> void:
 	for e in Roster.all():
 		assert_true(ResourceLoader.exists("res://assets/audio/music/%s.wav" % e["theme"]), e["theme"])

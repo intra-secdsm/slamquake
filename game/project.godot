@@ -12,6 +12,8 @@ config_version=5
 
 config/name="SLAMQUAKE! Suplex Spectacular!"
 config/description="Original 90s-style arcade pro wrestling game."
+config/use_custom_user_dir=true
+config/custom_user_dir_name="slamquake"
 run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/bg_color=Color(0.039, 0, 0.078, 1)

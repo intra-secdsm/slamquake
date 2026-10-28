@@ -48,6 +48,7 @@ func _ready() -> void:
 	camera = BroadcastCamera.new()
 	add_child(camera)
 	camera.current = true
+	HitFx.prewarm(camera)
 
 	var help: Array[String] = []
 	var used := {}

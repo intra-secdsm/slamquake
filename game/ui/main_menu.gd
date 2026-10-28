@@ -260,9 +260,10 @@ func _build_title() -> Control:
 
 # ---------------------------------------------------------------- options
 
-const OPTIONS := ["music_volume", "sfx_volume", "crowd_volume", "fullscreen", "crt", "entrances", "replays"]
+const OPTIONS := ["music_volume", "sfx_volume", "crowd_volume", "fullscreen", "high_quality", "crt", "entrances", "replays"]
 const OPTION_NAMES := {"music_volume": "Music", "sfx_volume": "Sound effects", "crowd_volume": "Crowd",
-	"fullscreen": "Fullscreen", "crt": "CRT filter (menus)", "entrances": "Entrances", "replays": "Instant replays"}
+	"fullscreen": "Fullscreen", "high_quality": "Graphics", "crt": "CRT filter (menus)", "entrances": "Entrances",
+	"replays": "Instant replays"}
 
 
 func _build_options() -> Control:
@@ -312,6 +313,8 @@ func _refresh_options() -> void:
 		var key: String = OPTIONS[i]
 		var v: Variant = Settings.get(key)
 		var shown := "%d" % roundi(float(v) * 10.0) if v is float else ("On" if v else "Off")
+		if key == "high_quality":
+			shown = "High" if v else "Low (faster)"
 		_opt_rows[i].text = "◀  %s: %s  ▶" % [OPTION_NAMES[key], shown]
 
 

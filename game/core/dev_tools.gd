@@ -25,14 +25,53 @@ func _ready() -> void:
 		_measure_fps(float(_args["fps"]))
 
 
+## Frame timing: the frame rate (capped by vsync / the compositor), how long the GPU takes
+## per frame, and when any slow frames happened. Headless runs are uncapped, so there the
+## frame times are the game's whole CPU cost.
 func _measure_fps(seconds: float) -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	var vp := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
 	await get_tree().create_timer(2.0).timeout      # let loading settle
-	var frames := Engine.get_process_frames()
-	var start := Time.get_ticks_msec()
-	await get_tree().create_timer(seconds).timeout
-	var fps := (Engine.get_process_frames() - frames) * 1000.0 / (Time.get_ticks_msec() - start)
-	print("FPS %.1f" % fps)
+	var frames: Array[float] = []
+	var gpu: Array[float] = []
+	var spikes: Array[String] = []
+	var added := {}           # what appeared in the scene this frame, to blame slow frames on
+	get_tree().node_added.connect(func(n: Node) -> void:
+		var key := n.get_class() + ("(%s)" % n.get_parent().name if n.get_parent() else "")
+		added[key] = added.get(key, 0) + 1)
+	var start := Time.get_ticks_usec()
+	var last := start
+	while Time.get_ticks_usec() - start < seconds * 1e6:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		var ms := (now - last) / 1000.0
+		frames.append(ms)
+		gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(vp))
+		if ms > 25.0 and spikes.size() < 40:
+			spikes.append("%.1fs:%.0fms" % [(now - start) / 1e6, ms])
+			if ms > 45.0 and not added.is_empty():
+				print("FPS %.0f ms frame after adding %s" % [ms, added])
+		added.clear()
+		last = now
+	print("FPS %.1f  frame avg %.2f p99 %.2f max %.1f ms  |  gpu avg %.2f p99 %.2f ms" % [
+		frames.size() / ((last - start) / 1e6), _avg(frames), _p99(frames), frames.max(), _avg(gpu), _p99(gpu)])
+	if not spikes.is_empty():
+		print("FPS slow frames: ", " ".join(spikes))
 	get_tree().quit()
+
+
+func _avg(a: Array[float]) -> float:
+	var t := 0.0
+	for v in a:
+		t += v
+	return t / maxf(a.size(), 1)
+
+
+func _p99(a: Array[float]) -> float:
+	var s := a.duplicate()
+	s.sort()
+	return s[int(s.size() * 0.99)] if not s.is_empty() else 0.0
 
 
 ## Take the --screenshot a few frames from now instead of after --frames
