@@ -8,19 +8,30 @@ func _ready() -> void:
 	add_child(ring)
 	var y := Ring.canvas_height()
 	var poses := DevTools.get_arg("poses", "idle@0").split(",")
-	var spacing := 1.25
+	var pairs := poses[0].begins_with("pair:")
+	var spacing := 3.4 if pairs else 1.25
 	var x0 := -spacing * (poses.size() - 1) / 2.0
 	var side := DevTools.get_arg("view", "side") == "side"
 	for i in poses.size():
-		var parts := poses[i].split("@")
-		var w := WrestlerModel.new()
-		w.position = Vector3(x0 + i * spacing, y, 0)
-		add_child(w)
-		# side view: wrestlers face +x... so the camera at +z sees them in profile
-		w.rotation.y = PI / 2 if side else 0.0
-		w.play(parts[0], 0.0)
-		w.anim_player.seek(float(parts[1]) if parts.size() > 1 else 0.0, true)
-		w.anim_player.pause()
+		var parts := poses[i].trim_prefix("pair:").split("@")
+		var t := float(parts[1]) if parts.size() > 1 else 0.0
+		var anims: Array = [parts[0]]
+		if pairs:
+			anims = [parts[0] + "_a", parts[0] + "_d"]
+		for j in anims.size():
+			var w := WrestlerModel.new()
+			if j == 1:
+				var l := WrestlerLook.new()
+				l.trunks_color = Color(0.1, 0.5, 0.95)
+				l.hair_style = "bald"
+				w.look = l
+			w.position = Vector3(x0 + i * spacing, y, 0)
+			add_child(w)
+			# side view: wrestlers face +x, so the camera at +z sees them in profile
+			w.rotation.y = PI / 2 if side else 0.0
+			w.play(anims[j], 0.0)
+			w.anim_player.seek(t, true)
+			w.anim_player.pause()
 		var label := Label3D.new()
 		label.text = poses[i]
 		label.position = Vector3(x0 + i * spacing, y + 2.25, 0)
@@ -29,6 +40,6 @@ func _ready() -> void:
 		add_child(label)
 	var cam := Camera3D.new()
 	add_child(cam)
-	var width := maxf(poses.size() * spacing, 3.0)
+	var width := maxf(poses.size() * spacing * (0.75 if pairs else 1.0), 3.0)
 	cam.fov = 35
 	cam.look_at_from_position(Vector3(0, y + 1.1, width * 1.25 + 1.5), Vector3(0, y + 0.85, 0))

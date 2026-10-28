@@ -1,7 +1,7 @@
 """Animation library. Each module exposes ALL: list[Anim]."""
-from . import basic, reactions, strikes
+from . import basic, grapples, reactions, referee, strikes
 
-MODULES = [basic, strikes, reactions]
+MODULES = [basic, strikes, reactions, grapples, referee]
 
 
 def all_anims():

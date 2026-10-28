@@ -23,6 +23,7 @@ func update(w: Wrestler, _delta: float) -> void:
 		move = Vector3(v.x, 0, v.y).limit_length(1.0)
 	run_held = InputRouter.held(slot, "run")
 	block_held = InputRouter.held(slot, "block")
+	block_pressed = InputRouter.pressed(slot, "block")
 	punch = InputRouter.pressed(slot, "punch")
 	kick = InputRouter.pressed(slot, "kick")
 	grapple = InputRouter.pressed(slot, "grapple")

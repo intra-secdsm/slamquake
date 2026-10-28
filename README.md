@@ -34,12 +34,18 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 | Move | Left stick / D-pad | WASD | Arrows |
 | Punch (tap repeatedly for a combo) | X | J | Num 1 |
 | Kick (big boot; knocks down as a combo ender) | Y | I | Num 5 |
-| Grapple (coming in M3) | A | K | Num 2 |
+| Grapple: tie-up; from behind = German suplex; vs a running opponent = back body drop | A | K | Num 2 |
 | Run (hold; bounce off the ropes; punch/kick while running = clothesline) | B | L | Num 3 |
-| Block (hold) | RB | Space | Num 0 |
+| Block (hold); press next to a downed opponent to **pin** | RB | Space | Num 0 |
 | Taunt | LB | U | Num 4 |
-| Get up faster when down | mash any button | | |
+| Get up faster / kick out of a pin | mash any button | | |
 | Pause | Start | Esc | Num Enter |
+
+**In a tie-up:** punch = headbutt, punch + direction = body slam, kick = suplex,
+kick + direction = DDT, run (+ direction) = Irish whip into the ropes or a corner, grapple = shove away.
+**Opponent down:** grapple = pick up, punch = elbow drop, kick = stomp, block = pin.
+Whipped opponents coming back off the ropes can be clotheslined (punch/kick) or back body dropped (grapple).
+Win by pinfall; pins with the head or body under the ropes are broken.
 
 Gamepad N always controls player N. F1 toggles the on-screen controls.
 
@@ -66,7 +72,7 @@ tools/screenshot.sh res://dev/pose_lineup.tscn out.png 20 --poses=run@0,knockdow
 | M0 | Toolchain, repo, project skeleton, tests | ✅ |
 | M1 | Blender → Godot asset pipeline (rig, wrestler, ring) | ✅ |
 | M2 | Movement, strikes, camera, HUD | ✅ |
-| M3 | Grapples, whips, rope rebounds, pinfalls: first full match | |
+| M3 | Grapples, whips, rope rebounds, pinfalls: first full match | ✅ |
 | M4 | Top rope, apron, outside, chair, tables, ragdoll | |
 | M5 | Momentum, finishers, reversals, game feel, AI | |
 | M6 | Tag team, 4 local players | |

@@ -139,7 +139,11 @@ def mirror(pose):
 
 
 class Anim:
-    """keys: list of (time_seconds, pose). ground: keep the lowest body point on the floor."""
+    """keys: list of (time_seconds, pose) or (time_seconds, pose, opts).
+
+    ground: keep the lowest body point on the floor. Per-key opts override it:
+    {"ground": bool, "air": metres the lowest point is lifted off the floor}.
+    """
 
     def __init__(self, name, keys, loop=False, ground=True, events=None, fps=30):
         self.name, self.keys, self.loop = name, keys, loop
@@ -199,11 +203,13 @@ def bake(armature, anim):
     armature.animation_data.action = act
 
     prev = {}
-    for t, pose in anim.keys:
+    for key in anim.keys:
+        t, pose = key[0], key[1]
+        opts = key[2] if len(key) > 2 else {}
         frame = round(t * anim.fps)
         apply_pose(armature, pose)
-        if anim.ground:
-            dz = _lowest_point(armature)
+        if opts.get("ground", anim.ground):
+            dz = _lowest_point(armature) - opts.get("air", 0.0)
             hips = armature.pose.bones["hips"]
             r = _rest_quat(armature, "hips")
             hips.location = hips.location + r.inverted() @ Vector((0, 0, -dz))
@@ -218,3 +224,38 @@ def bake(armature, anim):
                 pb.keyframe_insert("location", frame=frame)
     armature.animation_data.action = None
     return act
+
+
+def root_info(pose):
+    """Root bone placement of a pose in Godot coordinates: pos (x=left, y=up, z=fwd), yaw deg."""
+    root = pose.get("root", {})
+    left, fwd, up = root.get("move", (0.0, 0.0, 0.0))
+    return {"pos": [round(left, 4), round(up, 4), round(fwd, 4)], "yaw": root.get("turn", 0.0)}
+
+
+def at(pose, fwd=0.0, left=0.0, turn=0.0):
+    """Place a pose in pair space: the partner's root offset from the attacker."""
+    return merge(pose, {"root": {"move": (left, fwd, 0.0), "turn": turn}})
+
+
+class Paired:
+    """A two-wrestler move authored in the attacker's frame.
+
+    keys: (time, attacker_pose, defender_pose[, opts]) where defender poses include their
+    root offset (see at()). opts: air_a / air_d / ground_a / ground_d.
+    Produces animations "<name>_a" and "<name>_d" sharing timing and events.
+    """
+
+    def __init__(self, name, keys, events=None):
+        self.name, self.keys, self.events = name, keys, events or {}
+
+    def anims(self):
+        ka, kd = [], []
+        for k in self.keys:
+            t, pa, pd = k[0], k[1], k[2]
+            o = k[3] if len(k) > 3 else {}
+            ka.append((t, pa, {"air": o.get("air_a", 0.0), "ground": o.get("ground_a", True)}))
+            kd.append((t, pd, {"air": o.get("air_d", 0.0), "ground": o.get("ground_d", True)}))
+        return [Anim(self.name + "_a", ka, events=self.events),
+                Anim(self.name + "_d", kd, events=self.events)]
+

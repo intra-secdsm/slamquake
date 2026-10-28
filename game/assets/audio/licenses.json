@@ -40,5 +40,26 @@
     "author": "generated (this project)",
     "license": "CC0-1.0",
     "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/mat_slap.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/bell.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
+  },
+  {
+    "file": "sfx/bell_triple.wav",
+    "source": "tools/synth_sfx.py",
+    "author": "generated (this project)",
+    "license": "CC0-1.0",
+    "notes": "procedurally synthesized placeholder"
   }
 ]

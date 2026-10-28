@@ -12,6 +12,9 @@ var _banner: Label
 var _banner_time := 0.0
 var _help: Label
 var _root: Control
+var _kick_box: Control
+var _kick_fill: ColorRect
+var _kick_label: Label
 
 
 func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
@@ -35,6 +38,8 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 	_banner.modulate.a = 0.0
 	_root.add_child(_banner)
 
+	_build_kickout_meter()
+
 	_help = Label.new()
 	_help.text = help_text + "\n\nF1: hide controls    Esc / Start: pause"
 	_help.position = Vector2(24, 0)
@@ -46,6 +51,40 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 	_help.add_theme_color_override("font_outline_color", Color.BLACK)
 	_help.add_theme_constant_override("outline_size", 6)
 	_root.add_child(_help)
+
+
+func _build_kickout_meter() -> void:
+	_kick_box = Control.new()
+	_kick_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_kick_box.position = Vector2(-260, -210)
+	_kick_box.visible = false
+	_root.add_child(_kick_box)
+	var bg := ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.7)
+	bg.size = Vector2(520, 26)
+	_kick_box.add_child(bg)
+	_kick_fill = ColorRect.new()
+	_kick_fill.color = Color("ffd400")
+	_kick_fill.position = Vector2(4, 4)
+	_kick_fill.size = Vector2(0, 18)
+	_kick_box.add_child(_kick_fill)
+	_kick_label = Label.new()
+	_kick_label.position = Vector2(0, -44)
+	_kick_label.size = Vector2(520, 40)
+	_kick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_kick_label.add_theme_font_size_override("font_size", 30)
+	_kick_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_kick_label.add_theme_constant_override("outline_size", 8)
+	_kick_box.add_child(_kick_label)
+
+
+## Show the pinned wrestler's kick-out progress (null hides the meter).
+func show_kickout(w: Wrestler, progress: float) -> void:
+	_kick_box.visible = w != null
+	if w == null:
+		return
+	_kick_label.text = "%s: MASH TO KICK OUT!" % w.display_name.to_upper()
+	_kick_fill.size.x = 512.0 * clampf(progress, 0.0, 1.0)
 
 
 func banner(text: String, seconds: float = 1.6) -> void:

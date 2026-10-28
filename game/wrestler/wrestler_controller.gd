@@ -5,6 +5,7 @@ extends RefCounted
 var move := Vector3.ZERO      ## desired world-space direction, length 0..1
 var run_held := false
 var block_held := false
+var block_pressed := false    ## one-shot (pins a downed opponent)
 var punch := false            ## one-shot (this frame)
 var kick := false
 var grapple := false
@@ -22,3 +23,4 @@ func clear_one_shots() -> void:
 	grapple = false
 	taunt = false
 	mash = false
+	block_pressed = false
