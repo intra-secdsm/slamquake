@@ -51,7 +51,7 @@ const ALL := {
 		"sfx": "finisher_impact", "finisher": true, "reversal": 0.2, "down_extra": 1.5},
 	"checkmate": {"name": "Checkmate", "damage": 32.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
-	"wipeout": {"name": "Wipeout", "damage": 31.0, "end_a": "getup", "end_d": "down", "sfx": "finisher_impact",
+	"wipeout": {"name": "Wipeout", "damage": 31.0, "end_a": "idle", "end_d": "down", "sfx": "finisher_impact",
 		"finisher": true, "reversal": 0.2, "down_extra": 1.5},
 	"system_crash": {"name": "System Crash", "damage": 32.0, "end_a": "idle", "end_d": "down",
 		"sfx": "finisher_impact", "finisher": true, "reversal": 0.2, "down_extra": 1.5},
