@@ -47,7 +47,7 @@ func update(w: Wrestler, delta: float) -> void:
 		return
 
 	match w.state:
-		Wrestler.State.DOWN, Wrestler.State.PINNED:
+		Wrestler.State.DOWN, Wrestler.State.PINNED, Wrestler.State.CORNERED, Wrestler.State.CORNER_HIT:
 			mash = _rng.randf() < profile["mash"] * delta
 			return
 		Wrestler.State.PERCH:

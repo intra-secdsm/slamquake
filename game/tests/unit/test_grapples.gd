@@ -135,3 +135,47 @@ func test_downed_opponent_can_be_stomped_and_picked_up() -> void:
 	await _wait_until(func() -> bool: return a.state == S.IDLE and b.state == S.DOWN, 60)
 	ca.press = "grapple"
 	assert_true(await _wait_until(func() -> bool: return a.state == S.TIEUP and b.state == S.HELD, 90), "picked up into a tie-up")
+
+
+## Stomping or elbow-dropping a downed opponent can't keep them down forever.
+func test_ground_spam_cannot_keep_opponent_down() -> void:
+	b.health = 20.0
+	b._go_down()
+	await wait_physics_frames(2)
+	var frames := 0
+	while b.state != S.GETUP and frames < 60 * 8:
+		if a.state == S.IDLE and b.is_down():
+			ca.press = "kick" if frames % 2 == 0 else "punch"
+		await wait_physics_frames(1)
+		frames += 1
+	assert_eq(b.state, S.GETUP, "got up despite the ground attacks")
+	assert_lt(frames / 60.0, Wrestler.DOWN_MAX + 2.0)
+
+
+func test_getting_up_gives_a_moment_of_protection() -> void:
+	b._go_down()
+	b._down_left = 0.05
+	assert_true(await _wait_until(func() -> bool: return b.state == S.IDLE, 120), "back up")
+	assert_false(b.can_be_hit(), "can't be jabbed the instant they're up")
+	assert_false(b.can_be_grappled())
+	await wait_seconds(Wrestler.WAKE_GRACE + 0.05)
+	assert_true(b.can_be_hit())
+
+
+func test_corner_hits_do_not_trap_forever() -> void:
+	var lim := b._rope_limit() + 0.18
+	b.global_position = Vector3(lim, b.global_position.y, -lim)
+	b._corner_clock = 0.0
+	b._corner_hits = 0
+	b._enter(S.CORNERED)
+	a.global_position = b.global_position + Vector3(-0.8, 0, 0.8)
+	a.look_at(b.global_position, Vector3.UP, true)
+	await wait_physics_frames(2)
+	var frames := 0
+	while b.state in [S.CORNERED, S.CORNER_HIT] and frames < 60 * 4:
+		if a.state == S.IDLE:
+			ca.press = "punch"
+		await wait_physics_frames(1)
+		frames += 1
+	assert_true(b.state not in [S.CORNERED, S.CORNER_HIT], "stumbled out of the corner")
+	assert_lt(frames / 60.0, Wrestler.CORNER_TIME + 0.3)
