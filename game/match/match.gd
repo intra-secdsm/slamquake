@@ -68,7 +68,7 @@ func _ready() -> void:
 			w.controller = PlayerController.new(e["slot"])
 			help.append("P%d  " % (e["slot"] + 1) + InputRouter.describe(e["slot"]).replace("\n", "\n      "))
 		else:
-			w.controller = CpuController.new(e["difficulty"])
+			w.controller = CpuController.new(e["difficulty"], 0, CpuController.style_for(entry))
 			w.infinite_health = e["difficulty"] == 0
 		add_child(w)
 		var spot: Vector3 = START_SPOTS[i % START_SPOTS.size()]

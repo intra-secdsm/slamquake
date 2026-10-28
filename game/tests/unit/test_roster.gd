@@ -124,3 +124,15 @@ func test_match_uses_the_wrestlers_moveset() -> void:
 	assert_eq(bruno.stats["power"], 5)
 	assert_gt(bruno.damage_boost(), 1.0, "power 5 hits harder")
 	assert_eq(bruno.move_for("tieup_kick"), Movesets.resolve(Roster.builtin()[2]["moves"])["tieup_kick"])
+
+
+func test_cpu_fights_in_character() -> void:
+	for e in Roster.builtin():
+		assert_true(CpuController.STYLES.has(CpuController.style_for(e)), e["name"])
+	var flyer := CpuController.new(2, 1, "highflyer")
+	var power := CpuController.new(2, 1, "powerhouse")
+	assert_gt(flyer.profile["run"], power.profile["run"])
+	assert_gt(power.profile["grapple"], flyer.profile["grapple"])
+	assert_eq(CpuController.new(2, 1).profile, CpuController.PROFILES[2], "no style, no change")
+	assert_eq(CpuController.style_for({"stats": {"power": 2, "speed": 5, "toughness": 2, "charisma": 3}}), "highflyer")
+	assert_eq(CpuController.style_for({"stats": {"power": 5, "speed": 1, "toughness": 4, "charisma": 2}}), "powerhouse")
