@@ -179,6 +179,78 @@ HAIR_FRONT = dict(normal=(0, 1, 0.8), offset=float(np.dot(np.array([0, 1, 0.8]) 
                                                          [0, -0.07, 1.85])))
 
 
+def _sdf(p, shape, grow=0.0):
+    """A whole Shape used as one primitive, grown outwards by `grow` metres."""
+    return shape.eval(p) - grow
+
+
+def _head():
+    """The bare head and neck. Short hair and facial hair are layers on its skin. Only the neck
+    changes with build, so this takes the heaviest one: the swelling neck stays under the hair."""
+    big = body_shape(**{**BASE_PARAMS, "mass": 1.0, "muscle": 1.0})
+    return Shape([p for p in big.prims if p.bone in ("head", "neck")])
+
+
+def _layer(head, thickness):
+    """Hair lying on the skin; it fills the head too, which the cuts after it close off."""
+    return Prim(_sdf, "head", shape=head, grow=thickness)
+
+
+def _combed(p, shape, grow, pole, aim, lines, depth):
+    """A layer `grow` thick on `shape` with `lines` comb grooves `depth` deep. They run back from
+    where the line from `pole` along `aim` leaves the face and fade out as they gather at `pole`."""
+    a = np.asarray(aim, np.float32) / np.linalg.norm(aim)
+    across = np.array([1, 0, 0], np.float32)
+    q = p - np.asarray(pole, np.float32)
+    u, v = q @ across, q @ np.cross(a, across)
+    fade = np.clip((np.hypot(u, v) - 0.015) / 0.04, 0, 1)
+    return shape.eval(p) - grow + depth * fade * 0.5 * (1 - np.cos(np.arctan2(u, v) * lines))
+
+
+def _ear_gaps(k=0.008):
+    """Cut the hair back around both ears."""
+    return [Prim(ellipsoid, None, k, op="sub", c=(s * 0.088, 0.008, 1.772), radii=(0.03, 0.034, 0.044))
+            for s in (1, -1)]
+
+
+def _scalp_point(polar, azimuth, depth=1.0):
+    """Point on the skull: polar degrees from the crown, azimuth degrees round from the face
+    towards the left ear. `depth` < 1 sinks it into the head."""
+    t, f = np.radians(polar), np.radians(azimuth)
+    d = np.array([np.sin(t) * np.sin(f), -np.sin(t) * np.cos(f), np.cos(t)])
+    return np.array([0, 0.012, 1.80]) + d * np.array([0.083, 0.098, 0.10]) * depth, d
+
+
+# Gelled spikes: (polar, azimuth, length) on the top of the head. They stand up, fan out a
+# little and sweep back.
+SPIKES = [(0, 0, 0.07), (26, 0, 0.064), (26, 72, 0.068), (26, 144, 0.062), (26, 216, 0.066), (26, 288, 0.068),
+          (50, 35, 0.054), (50, 105, 0.058), (50, 180, 0.052), (50, 255, 0.058), (50, 325, 0.054),
+          (70, 140, 0.04), (70, 220, 0.04)]
+
+
+def _spikes():
+    P = []
+    for polar, azimuth, length in SPIKES:
+        base, d = _scalp_point(polar, azimuth, 0.7)
+        tip, _ = _scalp_point(polar, azimuth)
+        lean = d * (0.6, 0.6, 0) + np.array([0, 0.25, 1.0])
+        P.append(Prim(round_cone, "head", 0.014, a=_t(base), b=_t(tip + lean / np.linalg.norm(lean) * length),
+                      r1=0.032, r2=0.006))
+    return P
+
+
+def _puffs(centre, radii, count, r, rise):
+    """Round curls spread evenly over an ellipsoid (a Fibonacci spiral), each rising `rise` above it."""
+    P = []
+    for i in range(count):
+        z = 1 - 2 * (i + 0.5) / count
+        a = i * np.pi * (3 - np.sqrt(5))
+        d = np.array([np.sqrt(1 - z * z) * np.cos(a), np.sqrt(1 - z * z) * np.sin(a), z])
+        c = np.asarray(centre) + d * (np.asarray(radii) - (r - rise))
+        P.append(Prim(sphere, "head", 0.012, c=_t(c), r=r))
+    return P
+
+
 def hair_shape(style):
     P = []
     scalp = dict(c=(0, 0.016, 1.805), radii=(0.091, 0.106, 0.106))
@@ -203,12 +275,116 @@ def hair_shape(style):
             P.append(Prim(round_cone, "head", 0.04, a=(s * 0.07, 0.03, 1.79),
                           b=(s * 0.085, 0.06, 1.52), r1=0.04, r2=0.045))
         P.append(Prim(round_cone, "head", 0.04, a=(0, 0.07, 1.79), b=(0, 0.09, 1.50), r1=0.07, r2=0.07))
+    elif style == "ponytail":
+        # pulled back tight, gathered at the back of the head, then a thick tail
+        P += [Prim(_combed, "head", shape=_head(), grow=0.005, pole=(0, 0.11, 1.815), aim=(0, -1, 0.05),
+                   lines=36, depth=0.0012),
+              Prim(half_space, None, 0.006, op="and", **HAIR_FRONT),
+              *_ear_gaps(),
+              Prim(half_space, None, 0.006, op="and", normal=(0, 0, 1), offset=1.735),
+              Prim(ellipsoid, "head", 0.02, c=(0, 0.11, 1.815), radii=(0.036, 0.028, 0.032)),
+              Prim(round_cone, "head", 0.025, a=(0, 0.13, 1.805), b=(0, 0.158, 1.70), r1=0.03, r2=0.034),
+              Prim(round_cone, "head", 0.025, a=(0, 0.158, 1.70), b=(0, 0.152, 1.615), r1=0.034, r2=0.016)]
+    elif style == "spiky":
+        P += [_layer(_head(), 0.007), *_spikes(),
+              Prim(half_space, None, 0.006, op="and", **HAIR_FRONT),
+              *_ear_gaps(),
+              Prim(half_space, None, 0.006, op="and", normal=(0, 0, 1), offset=1.74)]
+    elif style == "buzz":
+        P += [_layer(_head(), 0.0035),
+              Prim(half_space, None, 0.003, op="and", **HAIR_FRONT),
+              *_ear_gaps(0.004),
+              # nape rounded off at the corners
+              *[Prim(ellipsoid, None, 0.004, op="sub", c=(s * 0.085, 0.075, 1.705), radii=(0.05, 0.05, 0.05))
+                for s in (1, -1)],
+              Prim(half_space, None, 0.003, op="and", normal=(0, 0, 1), offset=1.73)]
+    elif style == "afro":
+        centre, radii = (0, 0.035, 1.88), (0.15, 0.15, 0.128)
+        P += [_layer(_head(), 0.006),
+              Prim(ellipsoid, "head", 0.04, c=centre, radii=radii),
+              *_puffs(centre, radii, 64, 0.042, 0.01),
+              Prim(half_space, None, 0.03, op="and", **HAIR_FRONT),
+              # the bottom edge covers the ears and drops towards the nape
+              Prim(half_space, None, 0.02, op="and", normal=(0, 0.5, 1), offset=1.745 / np.hypot(0.5, 1))]
+    elif style == "slick":
+        # combed straight back from a little lift behind the hairline
+        top = Shape([_layer(_head(), 0.006),
+                     Prim(ellipsoid, "head", 0.035, c=(0, 0.02, 1.87), radii=(0.066, 0.08, 0.038))])
+        P += [Prim(_combed, "head", shape=top, grow=0.0, pole=(0, 0.09, 1.71), aim=(0, -0.904, 0.428),
+                   lines=30, depth=0.0015),
+              Prim(half_space, None, 0.006, op="and", **HAIR_FRONT),
+              *_ear_gaps(),
+              # tapering to a point at the nape
+              *[Prim(ellipsoid, None, 0.012, op="sub", c=(s * 0.088, 0.08, 1.70), radii=(0.055, 0.06, 0.085))
+                for s in (1, -1)],
+              Prim(half_space, None, 0.006, op="and", normal=(0, 0, 1), offset=1.70)]
     else:
         raise ValueError(style)
     return Shape(P)
 
 
-HAIR_STYLES = ["mullet", "mohawk", "flattop", "long"]
+HAIR_STYLES = ["mullet", "mohawk", "flattop", "long", "ponytail", "spiky", "buzz", "afro", "slick"]
+
+# Facial hair. The shader paints the mouth line at z ~1.7275 between x = +-0.026; it stays clear.
+# Strokes are (x, z, radius) points on one side of the face, seen from the front.
+MOUSTACHE = [(0.0, 1.7392, 0.0068), (0.012, 1.7385, 0.0068), (0.022, 1.7357, 0.0064),
+             (0.030, 1.731, 0.0056), (0.036, 1.724, 0.0045)]
+
+
+def _on_face(head, x, z):
+    """The point of the face at (x, z), found by marching in from the front."""
+    ys = np.arange(-0.2, 0.05, 0.0005, dtype=np.float32)
+    d = head.eval(np.stack([np.full_like(ys, x), ys, np.full_like(ys, z)], 1))
+    return (x, float(ys[np.argmax(d < 0)]), z)
+
+
+def _stroke(head, points, k=0.004):
+    """Capsules laid over the face through `points`, on both sides."""
+    P = []
+    for s in (1, -1):
+        c = [_on_face(head, s * x, z) for x, z, _ in points]
+        P += [Prim(round_cone, "head", k, a=c[i], b=c[i + 1], r1=points[i][2], r2=points[i + 1][2])
+              for i in range(len(points) - 1)]
+    return P
+
+
+def facial_hair_shape(style):
+    head = _head()
+    P = []
+    if style == "moustache":
+        P += _stroke(head, MOUSTACHE)
+    elif style == "goatee":
+        # chin patch with a point, joined to a lighter moustache round the mouth
+        P += [_layer(head, 0.0055),
+              Prim(ellipsoid, None, 0.006, op="and", c=(0, -0.1, 1.684), radii=(0.027, 0.04, 0.028)),
+              Prim(round_cone, "head", 0.01, a=(0, -0.097, 1.672), b=(0, -0.094, 1.652), r1=0.008, r2=0.005)]
+        P += _stroke(head, [(x, z, r * 0.8) for x, z, r in MOUSTACHE[:-1]])
+        P += _stroke(head, [(0.031, 1.731, 0.0048), (0.033, 1.718, 0.0046), (0.027, 1.704, 0.005)])
+    elif style == "beard":
+        cheeks = Shape([Prim(half_space, None, 0.0, normal=(s * 0.85, 0, -1), offset=-1.715 / np.hypot(0.85, 1))
+                        for s in (1, -1)])
+        P += [_layer(head, 0.007),
+              # below a line from the mouth corners up to the sideburns, in front of the ears
+              Prim(_sdf, None, 0.008, op="and", shape=cheeks),
+              Prim(half_space, None, 0.008, op="and", normal=(0, -1, -0.32), offset=-0.5476 / np.hypot(1, 0.32)),
+              Prim(half_space, None, 0.008, op="and", normal=(0, -0.333, 1), offset=1.685 / np.hypot(0.333, 1)),
+              Prim(ellipsoid, None, 0.006, op="sub", c=(0, -0.105, 1.7245), radii=(0.03, 0.03, 0.0105)),
+              Prim(ellipsoid, "head", 0.02, c=(0, -0.088, 1.674), radii=(0.038, 0.028, 0.025))]
+        P += _stroke(head, MOUSTACHE)
+    elif style == "horseshoe":
+        # a heavy moustache whose ends run down past the chin
+        P += _stroke(head, MOUSTACHE[:-1])
+        P += _stroke(head, [(0.031, 1.731, 0.006), (0.034, 1.716, 0.0058), (0.034, 1.700, 0.0055),
+                            (0.032, 1.684, 0.0052)])
+        for s in (1, -1):
+            end = _on_face(head, s * 0.032, 1.684)
+            P.append(Prim(round_cone, "head", 0.004, a=end, b=(end[0], end[1] - 0.003, 1.664), r1=0.0052, r2=0.0045))
+    else:
+        raise ValueError(style)
+    return Shape(P)
+
+
+FACIAL_HAIR = ["moustache", "goatee", "beard", "horseshoe"]
 
 # ------------------------------------------------------------------ meshing helpers
 
@@ -376,9 +552,18 @@ def build_body(armature, quick=False):
 
 
 def build_hair(armature, style, quick=False):
-    h = 0.008 if quick else 0.0045
-    ob = _mesh_from_shape(f"hair_{style}", hair_shape(style),
-                          (-0.16, -0.14, 1.45), (0.16, 0.2, 2.0), h, 2500 if quick else 6000)
+    return _hair_mesh(armature, f"hair_{style}", hair_shape(style), (-0.2, -0.14, 1.45), (0.2, 0.23, 2.03),
+                      0.008 if quick else 0.0045, 2500 if quick else 6000)
+
+
+def build_facial_hair(armature, style, quick=False):
+    return _hair_mesh(armature, f"facial_{style}", facial_hair_shape(style), (-0.12, -0.16, 1.6),
+                      (0.12, 0.05, 1.82), 0.005 if quick else 0.003, 1200 if quick else 2500)
+
+
+def _hair_mesh(armature, name, shape, bmin, bmax, h, target_tris):
+    """A mesh in the hair material, skinned entirely to the head."""
+    ob = _mesh_from_shape(name, shape, bmin, bmax, h, target_tris)
     me = ob.data
     _set_weights(ob, {"head": np.ones(len(me.vertices), np.float32)})
     me.materials.append(_material("hair", (0.15, 0.1, 0.06)))

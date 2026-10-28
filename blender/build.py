@@ -20,10 +20,11 @@ def build_wrestler(quick):
     armature = rig.build_armature()
     objs = [armature, body.build_body(armature, quick)]
     objs += [body.build_hair(armature, style, quick) for style in body.HAIR_STYLES]
+    objs += [body.build_facial_hair(armature, style, quick) for style in body.FACIAL_HAIR]
     objs.append(body.build_eyes(armature))
 
     manifest = {"blend_shapes": list(body.BLEND_SHAPES), "hair_styles": body.HAIR_STYLES,
-                "animations": {}}
+                "facial_hair": body.FACIAL_HAIR, "animations": {}}
     for anim in anims.all_anims():
         poses.bake(armature, anim)
         manifest["animations"][anim.name] = {
