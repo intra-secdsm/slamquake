@@ -782,6 +782,215 @@ def silas_theme():
     return s.render()
 
 
+def kai_theme():
+    """Kai Breakwater, "Breakwater": surf rock in E minor. A tremolo-picked lead drenched in spring
+    reverb over a galloping tom beat and a walking bass; the second half climbs a step for the hook."""
+    s = Track(165, 16, 8)
+    s.room(2.2, 3000, spring=0.7, guitar=0.45, lead=0.5, snare=0.15)
+    prog = [40, 40, 45, 45, 47, 45, 40, 47, 40, 40, 45, 45, 48, 47, 45, 47]      # Em Em Am Am B Am Em B ...
+    walk = {40: [40, 43, 45, 47], 45: [45, 48, 50, 52], 47: [47, 51, 54, 51], 48: [48, 52, 55, 52]}
+    for bar, root in enumerate(prog):
+        for k, n in enumerate(walk[root]):
+            s.pbass(bar, k, n - 12, 0.9, 0.55)
+        for beat in (0, 1.5, 2, 3.5):                       # rhythm guitar chops on the offbeats too
+            s.pick(bar, beat, root + 12, 0.4, 0.3, tone=2400, ring=0.5)
+            s.pick(bar, beat, root + 19, 0.4, 0.22, tone=2400, ring=0.5)
+        s.thump(bar, 0, 0.75, low=55, punch=100, decay=0.12)
+        s.thump(bar, 2, 0.7, low=55, punch=100, decay=0.12)
+        for beat in (1, 3):
+            s.crack(bar, beat, 0.6, body=210, decay=0.1)
+        for k in range(8):                                  # the gallop on the floor tom
+            if k % 2:
+                s.tom(bar, k * 0.5, 45, 0.3)
+        for k in range(4):
+            s.cymbal(bar, k, 0.12, decay=0.25, ping=0.6)
+        if bar % 8 == 7:
+            for k, n in enumerate((52, 50, 47, 45, 43, 43, 40, 40)):
+                s.tom(bar, 2 + k * 0.25, n, 0.6)
+
+    def trem(bar, beat, note, beats, gain=0.42):
+        # tremolo picking: the same note re-plucked every 32nd
+        for k in range(int(beats * 8)):
+            s.pick(bar, beat + k * 0.125, note, 0.14, gain * (1.0 if k % 2 == 0 else 0.8), tone=3200, ring=0.4, ch="lead")
+
+    hook = notes("E5/2 G5 F#5  E5 D5 B4/2  A4/2 C5 E5  B4/4  E5/2 G5 A5  B5 A5 G5/2  F#5 G5 F#5 E5  D#5/4")
+    climb = notes("G5/2 B5 A5  G5 F#5 E5/2  C6/2 B5 A5  B5/4  E6/2 D6 B5  C6 B5 A5 G5  F#5 A5 G5 F#5  E5/4")
+    s.line(0, hook, trem)
+    s.line(8, climb, trem)
+    s.cymbal(0, 0, 0.5, decay=1.2)
+    s.cymbal(8, 0, 0.5, decay=1.2)
+    return s.render()
+
+
+def overclock_theme():
+    """Overclock, "Overclocked": industrial techno in F minor. A driven saw bass rolls 16ths under a
+    four-on-the-floor kick, a sequencer arp opens its filter bar by bar, and crushed stabs glitch."""
+    s = Track(132, 16, 9)
+    s.room(1.2, 2800, clap=0.25, stab=0.3, perc=0.35, arp=0.2)
+    roots = [41, 41, 44, 39, 41, 41, 37, 39] * 2                    # F F Ab Eb F F Db Eb
+    bass_steps = [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 3, 0, 12, 10]
+    arp_steps = [0, 7, 12, 15, 12, 7, 3, 7]
+    for bar, root in enumerate(roots):
+        for k, step in enumerate(bass_steps):
+            if k % 4 != 0:                                          # leave room for the kick
+                s.growl(bar, k * 0.25, root - 12 + step, 0.22, 0.42, drive=5.0, cutoff=700 + 60 * (bar % 8))
+        for beat in range(4):
+            s.thump(bar, beat, 0.95, low=46, punch=140, decay=0.16, click=0.5, drive=1.5)
+            s.tick(bar, beat + 0.5, 0.55, decay=0.04)
+        s.clap(bar, 1, 0.7)
+        s.clap(bar, 3, 0.7)
+        if bar >= 4:
+            for k in range(16):
+                s.arp(bar, k * 0.25, root + 24 + arp_steps[k % 8], 0.24, 0.9, cutoff=900 + 220 * (bar % 8))
+        chord = [root + 12, root + 15, root + 19]
+        if bar % 2 == 1:
+            s.glitch(bar, 3.5, chord, 0.5, 0.35, stutter=3 if bar % 4 == 3 else 0)
+        if bar % 4 == 0:
+            s.anvil(bar, 0, 0.5, f0=520 + 40 * (bar % 8))
+            s.cymbal(bar, 0, 0.3, decay=0.9)
+        if bar % 8 == 7:
+            for k in range(8):
+                s.crack(bar, 2 + k * 0.25, 0.25 + k * 0.06, body=180, decay=0.06, drive=2.0)
+    s.line(8, notes("F5/1.5 Ab5/1.5 C6  Bb5/2 Ab5 G5  F5/1.5 Ab5/1.5 Eb6  Db6/4  C6/1.5 Bb5/1.5 Ab5"
+                    "  G5/2 Eb5 F5  C5/1.5 F5/1.5 G5  F5/4"), lambda b, bt, n, bs, **k: s.glitch(b, bt, [n], bs * 0.9, 0.3))
+    return s.render()
+
+
+def nova_theme():
+    """Nova Reyes, "Supernova": 90s eurodance in Ab. Pumping off-beat supersaws and an octave
+    bass, then a soaring lead hook that lifts into a key change for its last four bars."""
+    s = Track(140, 16, 10)
+    s.room(1.6, 3600, pad=0.25, lead=0.3, clap=0.2, choir=0.35)
+    prog = [(44, [60, 63, 68]), (41, [60, 65, 68]), (37, [61, 65, 68]), (39, [63, 67, 70])]   # Ab Fm Db Eb
+    for bar in range(16):
+        lift = 2 if bar >= 12 else 0
+        root, chord = prog[bar % 4]
+        root, chord = root + lift, [n + lift for n in chord]
+        for k in range(8):
+            s.pbass(bar, k * 0.5, root - 12 + (12 if k % 2 else 0), 0.45, 0.6, slap=0.2)
+        for beat in (0.5, 1.5, 2.5, 3.5):
+            s.supersaw(bar, beat, chord, 0.45, 0.4 if bar >= 4 else 0.28, cutoff=2600)
+        for beat in range(4):
+            s.thump(bar, beat, 0.9, low=50, punch=120, decay=0.15, click=0.3)
+            s.tick(bar, beat + 0.5, 0.5, decay=0.09)
+        s.clap(bar, 1, 0.65)
+        s.clap(bar, 3, 0.65)
+        if bar % 4 == 0:
+            s.cymbal(bar, 0, 0.4, decay=1.0)
+            s.choir(bar, 0, chord, 4, 0.18)
+    hook = notes("C5/.5 Eb5/.5 Ab5/1.5 G5/.5 F5  Eb5/1.5 C5/.5 F5/2  Db5/.5 F5/.5 Ab5/1.5 Bb5/.5 C6  Bb5/2 G5/2"
+                 "  C5/.5 Eb5/.5 Ab5/1.5 G5/.5 F5  Eb5/1.5 F5/.5 Ab5/2  Bb5/.5 Ab5/.5 G5 Eb5 G5  Ab5/4")
+    s.soar(4, hook[:24] if len(hook) > 24 else hook, gain=0.33)
+    s.soar(12, [(None if n is None else n + 2, b) for n, b in notes(
+        "C5/.5 Eb5/.5 Ab5/1.5 G5/.5 F5  Eb5/1.5 F5/.5 Ab5/2  Bb5/.5 Ab5/.5 G5 Eb5 G5  Ab5/4")], gain=0.36)
+    return s.render()
+
+
+def anthem_theme():
+    """"Main Event Anthem": stadium hard rock in A for created wrestlers. Big power-chord riff,
+    a gang chant on the off-bars and a call-and-response guitar lead."""
+    s = Track(128, 16, 11)
+    s.room(2.0, 3200, snare=0.35, choir=0.4, tom=0.3, guitar=0.12)
+    riff = [(45, 1.5), (45, 0.5), (48, 1), (50, 1), (45, 1.5), (45, 0.5), (52, 1), (50, 1)]      # A A C D / A A E D
+    for bar in range(16):
+        pos = 0.0
+        for k, (n, beats) in enumerate(riff[(bar % 2) * 4:(bar % 2) * 4 + 4]):
+            s.guitar(bar, pos, n - 12 if n > 47 else n, beats * 0.95, 0.5)
+            s.bass(bar, pos, n - 24, beats * 0.9, 0.6, cutoff=500)
+            pos += beats
+        for beat in (0, 2, 2.5):
+            s.thump(bar, beat, 0.95, low=48, punch=120, decay=0.2, drive=0.5)
+        s.crack(bar, 1, 0.8, body=180, decay=0.16, drive=0.6)
+        s.crack(bar, 3, 0.85, body=180, decay=0.16, drive=0.6)
+        for k in range(4):
+            s.cymbal(bar, k, 0.18, decay=0.4, ping=0.5)
+        if bar % 4 == 0:
+            s.cymbal(bar, 0, 0.55, decay=1.3)
+        if bar % 2 == 1 and bar < 8:                       # "oh-oh, oh!" chant answering the riff
+            for beat, n in ((0, [57, 64, 69]), (1, [57, 64, 69]), (2, [60, 64, 72])):
+                s.choir(bar, beat, n, 0.9, 0.3)
+        if bar % 8 == 7:
+            for k, n in enumerate((52, 50, 47, 45, 43, 40)):
+                s.tom(bar, 2.5 + k * 0.25, n, 0.7)
+    lead = notes("A4/1.5 C5/.5 D5 E5  G5/2 E5/2  A5/1.5 G5/.5 E5 D5  E5/4"
+                 "  A5/1.5 C6/.5 B5 A5  G5/2 E5 G5  A5 G5 E5 D5  A4/4")
+    s.line(8, lead, lambda b, bt, n, bs, **k: s.guitar(b, bt, n - 12, bs * 0.95, 0.3))
+    s.line(8, lead, lambda b, bt, n, bs, **k: s.choir(b, bt, [n - 12], bs * 0.9, 0.12))
+    return s.render()
+
+
+def groove_theme():
+    """"Ringside Groove": 90s boom-bap in D minor for created wrestlers. Swung hats, a dusty kick
+    and snare, slap bass, tonewheel organ stabs and a horn riff answering every other bar."""
+    s = Track(95, 16, 12)
+    s.room(1.0, 2600, snare=0.15, organ=0.2, brass=0.2)
+    chords = [(38, [62, 65, 69, 72]), (43, [62, 65, 67, 71])] * 8                  # Dm9-ish / G9
+    bassline = [(0, 0, 0.75), (0.75, 0, 0.25), (1.5, 12, 0.4), (2.5, 10, 0.4), (3, 7, 0.4), (3.5, 5, 0.4)]
+    swing = 0.08
+    for bar, (root, chord) in enumerate(chords):
+        for beat, step, beats in bassline:
+            s.pbass(bar, beat, root - 12 + step, beats, 0.7, slap=0.6 if step == 12 else 0.15)
+        for beat in (0, 0.75, 2.5) if bar % 2 == 0 else (0, 1.75, 2.5, 3.25):
+            s.thump(bar, beat, 0.95, low=52, punch=90, decay=0.22, click=0.2)
+        s.crack(bar, 1, 0.75, body=170, decay=0.14, snap=1.0)
+        s.crack(bar, 3, 0.8, body=170, decay=0.14, snap=1.0)
+        for k in range(8):
+            s.tick(bar, k * 0.5 + (swing if k % 2 else 0.0), 0.5 if k % 2 else 0.35, decay=0.03)
+        s.organ(bar, 0.5, chord, 0.4, 0.3)
+        s.organ(bar, 2.75, chord, 0.6, 0.25)
+        if bar % 2 == 1:
+            for beat, n in ((2, 69), (2.5, 72), (3, 74), (3.5, 72)):
+                s.brass(bar, beat, [n - 12, n], 0.4, 0.35)
+        if bar % 8 == 7:
+            s.rim(bar, 3.5, 0.6)
+            s.rim(bar, 3.75, 0.6)
+    return s.render()
+
+
+def grunge_theme():
+    """"Flannel Fury": grunge in drop D for created wrestlers. A quiet verse - clean picked chords,
+    rim clicks, a muted bass - then the loud chorus: sludgy fuzz chords and pounding drums."""
+    s = Track(108, 16, 13)
+    s.room(1.4, 2600, guitar=0.15, snare=0.2)
+    verse = [38, 38, 41, 43] * 2                       # D D F G
+    chorus = [38, 46, 41, 43, 38, 46, 45, 43]          # D Bb F G D Bb A G
+    arpeggio = [0, 7, 12, 15, 12, 7, 12, 7]
+    for bar in range(16):
+        loud = bar >= 8
+        root = chorus[bar - 8] if loud else verse[bar]
+        if loud:
+            for beat, beats in ((0, 1.5), (1.5, 1), (2.5, 1.5)):
+                s.fuzz(bar, beat, root, beats * 0.95, 0.55, cents=-20)
+            for k in range(8):
+                s.pbass(bar, k * 0.5, root - 12, 0.45, 0.6)
+            for beat in (0, 1.5, 2, 2.5):
+                s.thump(bar, beat, 1.0, low=46, punch=130, decay=0.2, drive=0.8)
+            s.crack(bar, 1, 0.9, body=170, decay=0.18, drive=1.2)
+            s.crack(bar, 3, 0.9, body=170, decay=0.18, drive=1.2)
+            for k in range(4):
+                s.cymbal(bar, k, 0.3, decay=0.7)
+        else:
+            for k, step in enumerate(arpeggio):
+                s.pick(bar, k * 0.5, root + 12 + step, 0.9, 0.35, tone=2000, ring=0.9)
+            s.pbass(bar, 0, root - 12, 3.5, 0.4)
+            s.thump(bar, 0, 0.6, low=50, punch=80, decay=0.18)
+            s.thump(bar, 2.5, 0.5, low=50, punch=80, decay=0.18)
+            s.rim(bar, 1, 0.5)
+            s.rim(bar, 3, 0.5)
+            for k in range(4):
+                s.tick(bar, k, 0.3, decay=0.04)
+        if bar == 7:                                    # the build into the chorus
+            for k in range(8):
+                s.crack(bar, 2 + k * 0.25, 0.3 + k * 0.08, body=170, decay=0.1)
+            s.fuzz(bar, 3, 38, 1, 0.4, cents=-20)
+        if bar == 8:
+            s.cymbal(bar, 0, 0.8, decay=1.5)
+    s.line(8, notes("A4/1.5 F4/.5 G4/2  A4/1.5 C5/.5 A4/2  D5/1.5 C5/.5 A4 F4  G4/4"
+                    "  A4/1.5 F4/.5 G4/2  A4/1.5 C5/.5 D5/2  F5/1.5 E5/.5 D5 C#5  D5/4"),
+           lambda b, bt, n, bs, **k: s.fuzz(b, bt, n - 12, bs * 0.9, 0.18, cents=10))
+    return s.render()
+
+
 # ---------------------------------------------------------------- crowd ambience loops
 
 def crowd_loop(seconds, formants, width, swell, claps, seed, rumble=0.3):
@@ -814,6 +1023,14 @@ def main():
     write(MUSIC / "theme_zip.wav", tone=4500, x=zip_theme())
     write(MUSIC / "theme_bruno.wav", tone=4500, x=bruno_theme())
     write(MUSIC / "victory.wav", tone=4500, x=victory_sting())
+    write(MUSIC / "theme_quetzal.wav", tone=4500, x=quetzal_theme())
+    write(MUSIC / "theme_silas.wav", tone=4500, x=silas_theme())
+    write(MUSIC / "theme_kai.wav", tone=4500, x=kai_theme())
+    write(MUSIC / "theme_overclock.wav", tone=4500, x=overclock_theme(), peak=0.63)
+    write(MUSIC / "theme_nova.wav", tone=4500, x=nova_theme())
+    write(MUSIC / "theme_anthem.wav", tone=4500, x=anthem_theme())
+    write(MUSIC / "theme_groove.wav", tone=4500, x=groove_theme())
+    write(MUSIC / "theme_grunge.wav", tone=4500, x=grunge_theme())
     write(SFX / "crowd_murmur_loop.wav", crowd_loop(8.0, (420, 700, 1100), 0.35, 0.25, 0, 11), peak=0.6)
     write(SFX / "crowd_cheer_loop.wav", crowd_loop(8.0, (520, 900, 1500, 2600), 0.45, 0.4, 260, 12, 0.5), peak=0.8)
 
