@@ -6,8 +6,8 @@ loop's first frame so the "stun" hand-off doesn't pop.
 """
 from ..poses import Paired, at, merge, sym
 from .basic import STANCE
-from .grapples import D_TIEUP, TIEUP
-from .reactions import groggy
+from .grapples import D_TIEUP, STIFF, TIEUP
+from .reactions import CROUCH, DOWN_BACK, groggy
 
 GROGGY_0 = groggy.keys[0][1]
 
@@ -87,5 +87,68 @@ knee_lift = Paired("knee_lift", [
     (0.9, STANCE, at(GROGGY_0, 1.25, turn=180)),
 ], events={"impact": 0.4})
 
-PAIRED = [knee_lift]
+# ---------------------------------------------------------------- knife-edge chop
+
+SHOVE_A = merge(STANCE, sym({"upper_arm.L": {"raise": 40, "swing": 85, "twist": 0}, "forearm.L": {"bend": 10},
+                             "fingers.L": {"curl": 5}}), {"spine": {"bend": 10}})
+# right arm cocked high and back, chest turned away
+WINDUP_A = merge(STANCE, {
+    "upper_arm.R": {"raise": 110, "swing": -30, "twist": 0}, "forearm.R": {"bend": 40}, "fingers.R": {"curl": 0},
+    "upper_arm.L": {"raise": 35, "swing": 70, "twist": 0}, "forearm.L": {"bend": 30},
+    "chest": {"turn": -30, "bend": -6}, "spine": {"turn": -12}, "head": {"turn": 15},
+})
+# open hand slashed across the defender's chest
+CHOP_A = merge(STANCE, {
+    "upper_arm.R": {"raise": 60, "swing": 95, "twist": 0}, "forearm.R": {"bend": 8}, "fingers.R": {"curl": 0},
+    "upper_arm.L": {"raise": -10, "swing": 20}, "forearm.L": {"bend": 60},
+    "chest": {"turn": 30, "bend": 8}, "spine": {"turn": 12}, "head": {"turn": -10},
+    "thigh.L": {"raise": 35}, "shin.L": {"bend": 30},
+})
+BRACE_D = merge(STANCE, {"spine": {"bend": -4}, "chest": {"bend": -6}, "head": {"bend": -6}})
+# rocked back, both hands clutching the chest
+REEL_D = merge(STANCE, sym({"upper_arm.L": {"raise": 10, "swing": 70, "twist": 0}, "forearm.L": {"bend": 130},
+                            "hand.L": {"bend": 30}, "fingers.L": {"curl": 30}}),
+               {"hips": {"bend": -10}, "spine": {"bend": -12}, "chest": {"bend": -16}, "neck": {"bend": -10},
+                "head": {"bend": -20}, "thigh.R": {"raise": 30}, "shin.R": {"bend": 30}})
+CLUTCH_D = merge(GROGGY_0, sym({"upper_arm.L": {"raise": 0, "swing": 65, "twist": 0}, "forearm.L": {"bend": 130},
+                                "hand.L": {"bend": 30}}), {"chest": {"bend": 18}})
+
+chop = Paired("chop", [
+    (0.0, TIEUP, D_TIEUP),
+    (0.12, SHOVE_A, at(BRACE_D, 0.95, turn=180)),
+    (0.3, WINDUP_A, at(BRACE_D, 1.05, turn=180)),
+    (0.42, CHOP_A, at(BRACE_D, 1.0, turn=180)),
+    (0.48, CHOP_A, at(REEL_D, 1.1, turn=180)),
+    (0.68, merge(CHOP_A, {"upper_arm.R": {"raise": 30}}), at(CLUTCH_D, 1.3, turn=180)),
+    (0.9, STANCE, at(GROGGY_0, 1.35, turn=180)),
+], events={"impact": 0.44})
+
+# ---------------------------------------------------------------- arm drag
+
+# attacker grabs the defender's right arm with both hands
+ARM_HOOK_A = merge(TIEUP, {"upper_arm.L": {"raise": 30, "swing": 75, "twist": 0}, "forearm.L": {"bend": 60},
+                           "upper_arm.R": {"raise": 40, "swing": 60, "twist": 0}, "forearm.R": {"bend": 80},
+                           "chest": {"turn": -15}})
+# dropping to the left knee and turning, dragging the arm down and across
+DRAG_A = merge(sym({"thigh.L": {"raise": 90, "spread": 15}, "shin.L": {"bend": 100}, "foot.L": {"flex": 20}}), {
+    "thigh.R": {"raise": 5}, "shin.R": {"bend": 110}, "foot.R": {"flex": -30},
+    "spine": {"bend": 30, "turn": -30}, "chest": {"turn": -25, "bend": 10},
+    "upper_arm.L": {"raise": -20, "swing": 40, "twist": 0}, "forearm.L": {"bend": 50},
+    "upper_arm.R": {"raise": 10, "swing": 50, "twist": 0}, "forearm.R": {"bend": 60},
+})
+ARM_STIFF_D = merge(STIFF, {"upper_arm.R": {"raise": 30, "swing": 80, "twist": 0}, "forearm.R": {"bend": 10}})
+
+arm_drag = Paired("arm_drag", [
+    (0.0, TIEUP, D_TIEUP),
+    (0.18, ARM_HOOK_A, at(merge(TIEUP, {"upper_arm.R": {"raise": 30, "swing": 70}}), 0.75, turn=180)),
+    (0.34, merge(DRAG_A, {"spine": {"bend": 20}}), at(merge(ARM_STIFF_D, {"hips": {"bend": 60}}), 0.55, left=-0.1,
+                                                       turn=180), {"air_d": 0.2}),
+    (0.48, DRAG_A, at(merge(ARM_STIFF_D, {"hips": {"bend": 160}}), 0.25, left=-0.45, turn=180), {"air_d": 0.95}),
+    (0.6, DRAG_A, at(merge(DOWN_BACK, {"hips": {"bend": 240}}), 0.0, left=-0.85, turn=180), {"air_d": 0.35}),
+    (0.68, DRAG_A, at(DOWN_BACK, -0.1, left=-1.05, turn=90)),
+    (0.85, CROUCH, at(DOWN_BACK, -0.1, left=-1.05, turn=90)),
+    (1.05, STANCE, at(DOWN_BACK, -0.1, left=-1.05, turn=90)),
+], events={"impact": 0.68})
+
+PAIRED = [knee_lift, chop, arm_drag]
 ALL = [a for p in PAIRED for a in p.anims()]

@@ -33,7 +33,7 @@ const ALL := {
 	"gutwrench": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
 	"neckbreaker": {"damage": 13.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
 	"powerslam": {"damage": 15.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall", "reversal": 0.3},
-	"piledriver": {"damage": 17.0, "end_a": "getup", "end_d": "down", "sfx": "hit_heavy", "reversal": 0.3},
+	"piledriver": {"damage": 17.0, "end_a": "idle", "end_d": "down", "sfx": "hit_heavy", "reversal": 0.3},
 	"back_suplex": {"damage": 14.0, "end_a": "getup", "end_d": "down", "sfx": "body_fall"},
 	"atomic_drop": {"damage": 9.0, "end_a": "idle", "end_d": "stun", "sfx": "hit_heavy"},
 	"leg_drop": {"damage": 10.0, "end_a": "getup", "end_d": "down", "align": "attacker", "sfx": "hit_heavy",
