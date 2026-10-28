@@ -40,6 +40,7 @@ Pinned tool versions live in [`tools/versions.env`](tools/versions.env).
 | Taunt (builds momentum); with a SPECIAL = **finisher** | LB | U | Num 4 |
 | Get up faster / kick out of a pin | mash any button | | |
 | Pause | Start | Esc | Num Enter |
+| Menus: move / change · confirm · back | D-pad or stick · A · B | Arrows · Enter · Esc | |
 
 **In a tie-up:** punch = headbutt, punch + direction = body slam, kick = suplex,
 kick + direction = DDT, run (+ direction) = Irish whip into the ropes or a corner, grapple = shove away.
