@@ -9,7 +9,7 @@ enum Mode { FOLLOW, TO_PIN, COUNT, SIGNAL }
 
 const WALK := 2.2
 const RUN := 5.0
-const KEEP_AWAY := 1.5
+const KEEP_AWAY := 2.6
 const COUNT_PERIOD := 0.9
 
 var wrestlers: Array[Wrestler] = []
@@ -69,7 +69,7 @@ func _follow(delta: float) -> void:
 		centre += w.global_position
 	centre /= wrestlers.size()
 	# stand behind the action as seen from the hard camera (+Z side)
-	var want := centre + Vector3(0, 0, -2.2)
+	var want := centre + Vector3(0, 0, -3.4)
 	for w in wrestlers:
 		var away := want - w.global_position
 		away.y = 0
@@ -142,7 +142,7 @@ func _face(point: Vector3) -> void:
 
 
 func _clamp_inside(p: Vector3) -> Vector3:
-	var lim := float(Ring.spec()["post_half"]) - 0.5
+	var lim := float(Ring.spec()["post_half"]) - 0.45
 	return Vector3(clampf(p.x, -lim, lim), Ring.canvas_height(), clampf(p.z, -lim, lim))
 
 
