@@ -124,7 +124,7 @@ func _show_hub() -> void:
 	_info.text = "Make your own wrestler, or start from one of the roster."
 	_hint.text = "↑↓ select   ←→ change   A: choose   B: back"
 	stage.end_preview()
-	AudioDirector.play_music("theme_menu", 0.6)
+	AudioDirector.play_music("theme_menu", 0.6, true, AudioDirector.MENU_DB)
 	var defs: Array[Dictionary] = []
 	if made.size() < CawStore.MAX_WRESTLERS:
 		defs.append({"text": func() -> String: return "★  NEW WRESTLER  ★", "press": func() -> void:
@@ -155,7 +155,7 @@ func _copy_roster() -> void:
 
 func _close() -> void:
 	visible = false
-	AudioDirector.play_music("theme_menu", 0.6)
+	AudioDirector.play_music("theme_menu", 0.6, true, AudioDirector.MENU_DB)
 	closed.emit()
 
 
@@ -186,7 +186,7 @@ func _set_tab(t: int) -> void:
 	stage.preview(_look, "head" if TABS[_tab] == "HEAD" else "full")
 	stage.preview_move("")
 	if TABS[_tab] == "PROFILE":
-		AudioDirector.play_music(_entry["theme"], 0.5)
+		AudioDirector.play_music(_entry["theme"], 0.5, true, AudioDirector.MENU_DB)
 	var defs: Array[Dictionary] = []
 	match TABS[_tab]:
 		"PROFILE": defs = _profile_rows()
@@ -284,7 +284,7 @@ func _profile_rows() -> Array[Dictionary]:
 		{"text": func() -> String: return "◀  Theme: %s  ▶" % Roster.THEME_NAMES.get(_entry["theme"], _entry["theme"]),
 			"change": func(step: int) -> void:
 				_entry["theme"] = themes[wrapi(themes.find(_entry["theme"]) + step, 0, themes.size())]
-				AudioDirector.play_music(_entry["theme"], 0.3)},
+				AudioDirector.play_music(_entry["theme"], 0.3, true, AudioDirector.MENU_DB)},
 		_stage_row(_entry_choice("Pyro", "pyro", Roster.pyro_styles()), "The pyro that goes off as you come out."),
 		_stage_row(_entry_choice("Titantron", "motif", Roster.MOTIFS), "Your picture on the titantron."),
 	]
@@ -495,6 +495,7 @@ func _build(defs: Array[Dictionary]) -> void:
 		var b := Button.new()
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 28)
+		ArrowClick.track(b)
 		b.gui_input.connect(_on_row_input.bind(i))
 		b.pressed.connect(_on_row_pressed.bind(i))
 		b.focus_entered.connect(_on_row_focus.bind(i))
@@ -570,7 +571,7 @@ func _on_row_pressed(i: int) -> void:
 	if d.has("press"):
 		d["press"].call()
 	elif d.has("change"):
-		d["change"].call(1)
+		d["change"].call(ArrowClick.step())
 		if _page == "edit":
 			_changed()
 	_refresh()

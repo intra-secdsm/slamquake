@@ -30,7 +30,7 @@ func _ready() -> void:
 	_stage = MenuStage.new()
 	add_child(_stage)
 	add_child(CrtOverlay.new())
-	AudioDirector.play_music("theme_menu", 1.0)
+	AudioDirector.play_music("theme_menu", 1.0, true, AudioDirector.MENU_DB)
 	AudioDirector.crowd_ambience(true)
 	AudioDirector.set_crowd(0.35)
 
@@ -62,6 +62,7 @@ func _ready() -> void:
 		var b := Button.new()
 		b.add_theme_font_size_override("font_size", 30)
 		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ArrowClick.track(b)
 		b.gui_input.connect(_on_row_input.bind(i))
 		b.pressed.connect(_on_row_pressed.bind(i))
 		box.add_child(b)
@@ -291,8 +292,9 @@ func _build_options() -> Control:
 	for i in OPTIONS.size():
 		var b := Button.new()
 		b.add_theme_font_size_override("font_size", 30)
+		ArrowClick.track(b)
 		b.gui_input.connect(_on_option_input.bind(i))
-		b.pressed.connect(_change_option.bind(i, 1))
+		b.pressed.connect(func() -> void: _change_option(i, ArrowClick.step()))
 		box.add_child(b)
 		_opt_rows.append(b)
 	var back := Button.new()
@@ -430,7 +432,7 @@ func _on_row_pressed(row: int) -> void:
 		_humans[row - 1] = not _humans[row - 1]
 		_refresh()
 		return
-	_change(row, 1)
+	_change(row, ArrowClick.step())
 	_show_pick_info(row)
 
 

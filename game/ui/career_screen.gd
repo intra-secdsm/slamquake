@@ -77,7 +77,7 @@ func _ready() -> void:
 # ---------------------------------------------------------------- pages
 
 func _show_start() -> void:
-	AudioDirector.play_music("theme_menu", 0.6)
+	AudioDirector.play_music("theme_menu", 0.6, true, AudioDirector.MENU_DB)
 	var saved := Career.load_saved()
 	if saved == null or not saved.playable():
 		if saved:
@@ -145,7 +145,7 @@ func _start_career() -> void:
 func _show_hub() -> void:
 	_page = "hub"
 	_confirm = ""
-	AudioDirector.play_music("theme_anthem" if career.is_ppv() else "theme_menu", 0.6)
+	AudioDirector.play_music("theme_anthem" if career.is_ppv() else "theme_menu", 0.6, true, AudioDirector.MENU_DB)
 	var beats := career.beats()
 	if not beats.is_empty() and not _seen_story():
 		_play_story(beats, _show_hub)
@@ -248,7 +248,7 @@ func _show_results(report: Dictionary) -> void:
 	var verdict := {"win": "VICTORY!", "loss": "DEFEAT", "draw": "DRAW"}
 	_layout(verdict.get(report["result"], ""), report["headline"])
 	AudioDirector.play_music("victory" if report["result"] == "win" else "theme_menu", 0.4,
-		report["result"] != "win")
+		report["result"] != "win", AudioDirector.MENU_DB)
 	var t := ""
 	if not report["unlocked"].is_empty():
 		t += "[color=#3dff6e]UNLOCKED![/color]\n"
@@ -492,6 +492,7 @@ func _build(defs: Array[Dictionary]) -> void:
 		var b := Button.new()
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 30)
+		ArrowClick.track(b)
 		b.gui_input.connect(_on_row_input.bind(i))
 		b.pressed.connect(_on_row_pressed.bind(i))
 		_list.add_child(b)
@@ -532,7 +533,7 @@ func _on_row_pressed(i: int) -> void:
 	if d.has("press"):
 		d["press"].call()
 	elif d.has("change"):
-		d["change"].call(1)
+		d["change"].call(ArrowClick.step())
 	if i < _rows.size():
 		_refresh()
 

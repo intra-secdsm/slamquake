@@ -14,6 +14,9 @@ var _rng := RandomNumberGenerator.new()
 var _music: Array[AudioStreamPlayer] = []     # two players for crossfades
 var _music_on := 0
 var _music_name := ""
+var _music_db := 0.0
+## Front-end music (menus, create-a-wrestler, career) plays this much quieter than the arena.
+const MENU_DB := -9.0
 var _murmur: AudioStreamPlayer
 var _cheer: AudioStreamPlayer
 var _crowd_target := 0.0
@@ -63,16 +66,21 @@ static func _looped(stream: AudioStream) -> AudioStream:
 	return stream
 
 
-## Crossfade to a music track from assets/audio/music ("" fades out).
-func play_music(track: String, fade: float = 1.0, loop: bool = true) -> void:
+## Crossfade to a music track from assets/audio/music ("" fades out), at `volume_db`.
+## A fade of 0 starts it at full level at once (the loading screen: a fade would stall).
+func play_music(track: String, fade: float = 1.0, loop: bool = true, volume_db: float = 0.0) -> void:
 	if track == _music_name:
+		if track != "" and not is_equal_approx(_music_db, volume_db):
+			_music_db = volume_db
+			create_tween().tween_property(_music[_music_on], "volume_db", volume_db, maxf(fade, 0.05))
 		return
 	_music_name = track
+	_music_db = volume_db
 	var old := _music[_music_on]
 	_music_on = 1 - _music_on
 	var cur := _music[_music_on]
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(old, "volume_db", -80.0, fade)
+	tw.tween_property(old, "volume_db", -80.0, maxf(fade, 0.05))
 	if track == "":
 		return
 	var path := MUSIC_DIR + track + ".wav"
@@ -81,9 +89,10 @@ func play_music(track: String, fade: float = 1.0, loop: bool = true) -> void:
 		return
 	var stream: AudioStream = load(path)
 	cur.stream = _looped(stream) if loop else stream
-	cur.volume_db = -30.0
+	cur.volume_db = volume_db if fade <= 0.0 else -30.0
 	cur.play()
-	tw.tween_property(cur, "volume_db", 0.0, fade * 0.6)
+	if fade > 0.0:
+		tw.tween_property(cur, "volume_db", volume_db, fade * 0.6)
 
 
 func music_playing() -> String:
