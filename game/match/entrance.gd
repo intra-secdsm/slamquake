@@ -67,7 +67,11 @@ func _side(members: Array) -> void:
 	var color: Color = entry.get("color", Color("ff2bd6"))
 	var pyro: String = entry.get("pyro", "classic")
 	m.arena.titantron.show_text(names, "", color, color.lerp(Color.WHITE, 0.4), entry.get("motif", "grid"))
-	m.hud.name_card(names, entry.get("tagline", "") if members.size() == 1 else "TAG TEAM")
+	var belt := int(GameState.belts.get(entry["id"], 0))
+	var subtitle: String = entry.get("tagline", "") if members.size() == 1 else "TAG TEAM"
+	if belt > 0:
+		subtitle = "WORLD HEAVYWEIGHT CHAMPION" if belt == 1 else "TAG TEAM CHAMPIONS"
+	m.hud.name_card(names, subtitle)
 	AudioDirector.play_music(entry.get("theme", "theme_thunder"), 0.3)
 	var stage := Arena.stage_point()
 	for i in members.size():

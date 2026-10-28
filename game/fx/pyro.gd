@@ -9,8 +9,8 @@ extends Node3D
 ## `at` is the front edge of the stage, in the middle. Frees itself when done.
 
 ## Seconds each style's show takes to play out (entrances hold the stage shot this long).
-const SHOW_TIME := {"classic": 1.8, "fireworks": 2.6, "flames": 2.3, "sparks": 2.4, "none": 2.2}
-const LIFETIME := {"classic": 4.0, "fireworks": 5.5, "flames": 4.0, "sparks": 5.0, "none": 3.4}
+const SHOW_TIME := {"classic": 1.8, "fireworks": 2.6, "flames": 2.3, "sparks": 2.4, "none": 2.2, "champion": 2.6}
+const LIFETIME := {"classic": 4.0, "fireworks": 5.5, "flames": 4.0, "sparks": 5.0, "none": 3.4, "champion": 5.5}
 
 var _glow: OmniLight3D       ## flames: heat glow that flickers while the jets burn
 var _glow_level := 0.0
@@ -30,6 +30,10 @@ static func fire(parent: Node, at: Vector3, color: Color, style: String = "class
 			p._sparks(color)
 		"none":
 			p._spotlights(color)
+		"champion":
+			# earned in career mode: gold fountains and gold fireworks at once
+			p._classic(Color(1.0, 0.78, 0.25), width)
+			p._fireworks(Color(1.0, 0.85, 0.4), width)
 		_:
 			p._classic(color, width)
 	p.create_tween().tween_callback(p.queue_free).set_delay(LIFETIME.get(style, LIFETIME["classic"]))

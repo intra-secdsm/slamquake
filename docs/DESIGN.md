@@ -174,3 +174,28 @@ M3 is the key gate: the core grapple and animation approach must feel good there
   - **Create-a-Wrestler** (`game/ui/caw_editor.gd`, `game/data/caw_store.gd`): a tabbed editor with a live preview; saves to `user://created_wrestlers.json`.
   - **Also:** a pause-menu move list, big-move callouts, and 8 new synthesized themes (5 for the roster, 3 for created wrestlers).
   - **Deferred:** submissions, apron moves and ragdoll.
+- **M9 (v0.9):**
+  - **Career** (`game/data/career.gd`): one saved career (`user://career.json`). A month is three TV shows (*Saturday Slamtime*) and a PPV:
+    - week 1: a ranking match
+    - week 2: a tag match with your CPU partner
+    - week 3: a ranking match
+    - PPV: a World title match if you're the champion or the top contender, otherwise a no-DQ grudge match with your rival
+  - **Rankings and titles:**
+    - A win is worth 3 points, 5 at a PPV and 2 in a tag match. A loss costs 1.
+    - The contender is whoever is top of the rankings when the month starts.
+    - Two tag wins earn a tag title shot.
+    - Everyone else's matches are simulated from points and stats.
+    - Title matches are one CPU difficulty step harder.
+    - Pacing, measured over 20 careers: a 75% win rate usually reaches a title shot by week 11 to 15.
+  - **Story** (`game/data/stories.gd`):
+    - Rivalry templates: jealousy, ambush, respect, mind games, spotlight, plus title chase and title defence.
+    - Each template has start, build, PPV, win and loss scenes.
+    - One-off moments: debut, new partner, tag titles won or lost, Hall of Fame.
+    - Played as promo scenes: the cast in the ring (`MenuStage.promo`) with comic captions.
+  - **Belts:** a shader-painted championship belt (gold for the World title, silver for the tag titles). It's worn to the ring, handed over at the bell, and put on the winners of a title match.
+  - **Unlocks** (`game/data/unlocks.gd`, `user://unlocks.json`):
+    - Champion pyro: win a PPV match.
+    - Roxy Ravage: win the tag titles.
+    - Mister Midnight: win the World title.
+    - Hall of Fame: three successful World title defences.
+  - **Tests:** a GUT pre-run hook points every save file at throwaway test files.

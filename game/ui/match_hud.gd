@@ -8,6 +8,8 @@ const BAR_H := 30.0
 const COLORS := [Color("ff2bd6"), Color("00e5ff"), Color("ffd400"), Color("7dff3a")]
 
 var _bars: Dictionary = {}       # Wrestler -> {fill: ColorRect, lag: ColorRect}
+const BANNER_SIZE := 96
+const BANNER_WIDTH := 1600.0
 var _banner: Label
 var _banner_time := 0.0
 var _help: Label
@@ -35,10 +37,10 @@ func setup(wrestlers: Array[Wrestler], help_text: String) -> void:
 
 	_banner = Label.new()
 	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_banner.position = Vector2(-400, 150)
-	_banner.size = Vector2(800, 120)
+	_banner.position = Vector2(-BANNER_WIDTH / 2.0, 150)
+	_banner.size = Vector2(BANNER_WIDTH, 120)
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.add_theme_font_size_override("font_size", 96)
+	_banner.add_theme_font_size_override("font_size", BANNER_SIZE)
 	_banner.add_theme_color_override("font_color", Color("ffd400"))
 	_banner.add_theme_color_override("font_outline_color", Color("ff2bd6"))
 	_banner.add_theme_constant_override("outline_size", 18)
@@ -117,6 +119,13 @@ func show_kickout(w: Wrestler, progress: float) -> void:
 
 func banner(text: String, seconds: float = 1.6) -> void:
 	_banner.text = text
+	# long banners ("WORLD HEAVYWEIGHT TITLE MATCH") shrink to fit across the screen
+	var widest := 0.0
+	for line in text.split("\n"):
+		widest = maxf(widest, _banner.get_theme_font("font").get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			BANNER_SIZE).x)
+	_banner.add_theme_font_size_override("font_size", BANNER_SIZE if widest <= BANNER_WIDTH - 60.0
+		else maxi(int(BANNER_SIZE * (BANNER_WIDTH - 60.0) / widest), 36))
 	_banner_time = seconds
 	_banner.modulate.a = 1.0
 	_banner.scale = Vector2(1.3, 1.3)

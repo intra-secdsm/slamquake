@@ -2,7 +2,7 @@ extends Node3D
 ## Dev tool: wrestlers with given looks standing side by side, for checking attire, masks,
 ## hair and body types.
 ##   tools/screenshot.sh res://dev/look_lineup.tscn out.png 20 --looks=<look>|<look>|... \
-##     [--cam=full|head|torso|legs] [--turn=DEGREES] [--anim=idle@0.0] [--ring=0]
+##     [--cam=full|head|torso|legs] [--turn=DEGREES] [--anim=idle@0.0] [--ring=0] [--belt=1|2]
 ## A <look> is a roster id (e.g. quetzal_neon), "default", or property overrides separated
 ## by ";" applied to a default look or to a roster look: "zip_volta;mask=classic;mask_color=#ff0000"
 ## "--turn=180" shows their backs, 90 their left sides.
@@ -22,6 +22,7 @@ func _ready() -> void:
 		w.look = parse_look(specs[i])
 		w.position = Vector3(x0 + i * spacing, y, 0)
 		add_child(w)
+		w.set_belt(int(DevTools.get_arg("belt", "0")))
 		w.rotation.y = deg_to_rad(float(DevTools.get_arg("turn", "0")))
 		w.play(anim[0], 0.0)
 		w.anim_player.seek(float(anim[1]) if anim.size() > 1 else 0.0, true)
@@ -48,7 +49,7 @@ static func parse_look(spec: String) -> WrestlerLook:
 	var l := WrestlerLook.new()
 	var start := 0
 	if parts[0] != "default" and not parts[0].contains("="):
-		for e in Roster.builtin():
+		for e in Roster.builtin() + Roster.hidden():
 			if e["id"] == parts[0]:
 				l = (e["look"] as WrestlerLook).duplicate()
 		start = 1

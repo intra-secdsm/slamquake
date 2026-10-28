@@ -86,6 +86,12 @@ func _ready() -> void:
 	start.pressed.connect(_start)
 	box.add_child(start)
 	_start_button = start
+	var career := Button.new()
+	career.text = "★  CAREER  ★"
+	career.add_theme_font_size_override("font_size", 30)
+	career.add_theme_color_override("font_color", Color("00e5ff"))
+	career.pressed.connect(_show_career)
+	box.add_child(career)
 	var caw := Button.new()
 	caw.text = "Create-a-Wrestler"
 	caw.add_theme_font_size_override("font_size", 24)
@@ -465,7 +471,14 @@ func _start() -> void:
 	_go()
 
 
+func _show_career() -> void:
+	GameState.career = null
+	get_tree().change_scene_to_file("res://ui/career.tscn")
+
+
 func _go() -> void:
+	GameState.career = null            # exhibition match
+	GameState.end_career_match()
 	AudioDirector.play_music("", 0.6)
 	AudioDirector.crowd_ambience(false)
 	get_tree().change_scene_to_file("res://match/match.tscn")

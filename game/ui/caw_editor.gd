@@ -285,7 +285,7 @@ func _profile_rows() -> Array[Dictionary]:
 			"change": func(step: int) -> void:
 				_entry["theme"] = themes[wrapi(themes.find(_entry["theme"]) + step, 0, themes.size())]
 				AudioDirector.play_music(_entry["theme"], 0.3)},
-		_stage_row(_entry_choice("Pyro", "pyro", Roster.PYRO_STYLES), "The pyro that goes off as you come out."),
+		_stage_row(_entry_choice("Pyro", "pyro", Roster.pyro_styles()), "The pyro that goes off as you come out."),
 		_stage_row(_entry_choice("Titantron", "motif", Roster.MOTIFS), "Your picture on the titantron."),
 	]
 
