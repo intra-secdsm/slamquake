@@ -151,7 +151,9 @@ func _box(st: SurfaceTool, c: Vector3, size: Vector3, part: float, side: float) 
 		var corners: Array[Vector3] = []
 		for q in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 			corners.append(c + (n * h + u * h * q.x + v * h * q.y))
-		for idx in [0, 1, 2, 0, 2, 3]:
+		# u x v points outward, so the corners run counter-clockwise from outside;
+		# Godot's front faces are clockwise
+		for idx in [0, 2, 1, 0, 3, 2]:
 			st.set_uv(Vector2(part, side))
 			st.add_vertex(corners[idx])
 

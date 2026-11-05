@@ -27,6 +27,21 @@ func test_crowd_fills_the_stands() -> void:
 	assert_eq(m.arena.heat, 1.0, "heat is clamped")
 
 
+func test_crowd_boxes_face_outward() -> void:
+	var crowd := Crowd.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	crowd._box(st, Vector3.ZERO, Vector3(0.4, 0.6, 0.2), 0.0, 0.0)
+	st.generate_normals()
+	var arrays := st.commit_to_arrays()
+	crowd.free()
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	assert_eq(verts.size(), 36)
+	for i in verts.size():
+		assert_gt(normals[i].dot(verts[i]), 0.0, "normal %d points out of the box" % i)
+
+
 func test_low_graphics_drops_haze_and_ssao() -> void:
 	await _start_match()
 	var env: Environment = (m.find_children("*", "WorldEnvironment", true, false)[0] as WorldEnvironment).environment
