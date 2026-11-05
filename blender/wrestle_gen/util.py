@@ -67,11 +67,28 @@ def _read_glb(path):
     return json.loads(data[20:20 + json_len]), data[20 + json_len + 8:]
 
 
+def canonical_triangles(tris):
+    """Triangles (N x 3 indices) in a canonical order that keeps their winding.
+
+    Each triangle is rotated (never reflected) to its lexicographically smallest
+    rotation, so [1,2,0] matches [0,1,2] but [0,2,1] does not, then the rows are sorted.
+    """
+    import numpy as np
+    best = tris
+    for k in (1, 2):
+        rot = np.roll(tris, -k, axis=1)
+        a, b = rot.T, best.T
+        smaller = (a[0] < b[0]) | ((a[0] == b[0]) & ((a[1] < b[1]) | ((a[1] == b[1]) & (a[2] < b[2]))))
+        best = np.where(smaller[:, None], rot, best)
+    return best[np.lexsort(best.T[::-1])]
+
+
 def glb_equivalent(a, b):
     """True if two GLBs differ at most in triangle order within index buffers.
 
-    Blender's exporter occasionally emits the same triangles in a different order;
-    treating that as unchanged keeps regenerated assets stable in Git LFS.
+    Blender's exporter occasionally emits the same triangles in a different order, or
+    starts a triangle at a different corner; treating that as unchanged keeps regenerated
+    assets stable in Git LFS. A reversed winding is a real change and is kept.
     """
     import numpy as np
     ja, ba = _read_glb(a)
@@ -89,9 +106,9 @@ def glb_equivalent(a, b):
         if acc is None:
             return False
         dtype = {5121: np.uint8, 5123: np.uint16, 5125: np.uint32}[acc["componentType"]]
-        ta = np.sort(np.frombuffer(va, dtype).reshape(-1, 3), axis=1)
-        tb = np.sort(np.frombuffer(vb, dtype).reshape(-1, 3), axis=1)
-        if not np.array_equal(ta[np.lexsort(ta.T)], tb[np.lexsort(tb.T)]):
+        ta = canonical_triangles(np.frombuffer(va, dtype).reshape(-1, 3))
+        tb = canonical_triangles(np.frombuffer(vb, dtype).reshape(-1, 3))
+        if not np.array_equal(ta, tb):
             return False
     return True
 
