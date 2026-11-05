@@ -40,6 +40,7 @@ const INPUT_BUFFER := 0.22
 const LOCK_ON_RANGE := 3.0
 const GRAB_RANGE := 1.15
 const GROUND_RANGE := 1.1        # reach to a downed opponent's body line
+const GROUND_REACH_Y := 0.5      # max height gap for sharing a ground/ring anchor
 const TIEUP_TIMEOUT := 1.8
 const CORNER_TIME := 2.4         # total time stuck in a corner, however often you're hit there
 const CORNER_MAX_HITS := 3        # strikes soaked in the corner before stumbling out
@@ -242,6 +243,12 @@ func distance_to_body(p: Vector3) -> float:
 	var feet := global_position + facing() * 0.9 * model_scale()
 	var q := Geometry3D.get_closest_point_to_segment(Vector3(p.x, 0, p.z), Vector3(head.x, 0, head.z), Vector3(feet.x, 0, feet.z))
 	return q.distance_to(Vector3(p.x, 0, p.z))
+
+
+## Ground moves and running grapples share one anchor: both wrestlers must be in the same
+## region and at a similar height, or the move would teleport one of them across the ropes.
+func _shares_region(t: Wrestler) -> bool:
+	return t.outside == outside and absf(t.global_position.y - global_position.y) < GROUND_REACH_Y
 
 
 func nearest_opponent() -> Wrestler:
@@ -477,7 +484,8 @@ func _try_action(action: String) -> bool:
 	if action != "block":
 		_grace = 0.0     # attacking gives up the wake-up protection
 	var target := nearest_opponent()
-	var downed := target != null and target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE
+	var downed := target != null and target.is_down() and _shares_region(target) \
+			and target.distance_to_body(global_position) < GROUND_RANGE
 	if held_item:
 		if action == "punch" or action == "kick":
 			# lock on like a strike does
@@ -867,9 +875,9 @@ func _try_grapple(target: Wrestler) -> void:
 		return
 	var to := flat_dir_to(target)
 	var d := _flat_len(target.global_position - global_position)
-	if target.is_down() and target.distance_to_body(global_position) < GROUND_RANGE:
+	if target.is_down() and _shares_region(target) and target.distance_to_body(global_position) < GROUND_RANGE:
 		_start_paired("pickup", target)
-	elif target.is_running() and target.facing().dot(-to) > 0.6 and d < 1.8:
+	elif target.is_running() and _shares_region(target) and target.facing().dot(-to) > 0.6 and d < 1.8:
 		_face(to, 0.0, true)
 		_start_paired("back_body_drop", target)
 	elif target.can_be_grappled() and d < GRAB_RANGE and facing().angle_to(to) < deg_to_rad(75) \
