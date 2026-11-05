@@ -137,6 +137,36 @@ func test_perched_wrestler_can_be_knocked_off() -> void:
 	assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "fell to the canvas")
 
 
+## Knocked off the top rope, a wrestler is "down" and in the ring region while still in
+## the air. Picking them up then would lift the attacker onto that airborne anchor, so
+## ground moves also need a similar height (issue #2 follow-up).
+func test_no_pickup_of_a_wrestler_falling_off_the_turnbuckle() -> void:
+	var corner := Ring.corner(1)
+	_place(a, Vector3(corner.x + 0.6, Ring.canvas_height(), corner.z - 0.6), Vector3(-1, 0, 1).normalized())
+	_place(b, Vector3(0, Ring.canvas_height(), -2.5), Vector3.FORWARD)
+	await wait_physics_frames(2)
+	ca.press = "grapple"
+	assert_true(await _wait_until(func() -> bool: return a.state == S.PERCH, 120), "perched")
+	_place(b, a.global_position + Vector3(0.7, 0, -0.7), Vector3(-1, 0, 1).normalized())
+	b.global_position.y = Ring.canvas_height()
+	await wait_physics_frames(1)
+	a.receive_strike(b, Strikes.get_move("jab"))
+	assert_eq(a.state, S.KNOCKDOWN, "knocked off the top")
+	# the setup this test is about: down, same region, in flat reach, but well above the canvas
+	assert_true(a.is_down())
+	assert_eq(a.outside, b.outside, "both count as in the ring")
+	assert_gt(a.global_position.y - b.global_position.y, Wrestler.GROUND_REACH_Y, "still in the air")
+	assert_lt(a.distance_to_body(b.global_position), Wrestler.GROUND_RANGE, "in flat ground reach")
+	cb.press = "grapple"
+	for i in 10:
+		await wait_physics_frames(1)
+		assert_ne(b.state, S.PAIRED, "no pickup of an airborne opponent (frame %d)" % i)
+		assert_almost_eq(b.global_position.y, Ring.canvas_height(), 0.1,
+			"attacker stays on the canvas (frame %d)" % i)
+	assert_true(await _wait_until(func() -> bool: return a.state == S.DOWN, 90), "landed")
+	assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "fell to the canvas")
+
+
 func test_chair_shot_is_a_disqualification_in_normal_rules() -> void:
 	var chair := m.chairs[0]
 	_place(a, chair.global_position + Vector3(0.6, 0, 0), Vector3.LEFT)
