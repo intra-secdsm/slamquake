@@ -160,3 +160,88 @@ func test_pinning_the_legal_man_wins_for_the_team() -> void:
 	assert_eq(m.winner.team, 0)
 	assert_eq(a2.state, S.APRON, "the partner celebrates where they are")
 	assert_true(a2.match_over)
+
+
+func _tag_out_for_countout(w: Wrestler) -> void:
+	_put(w, w.entry_spot(), Vector3.BACK)
+	assert_true(w._try_tag(), "tag succeeds before the count-out")
+	assert_true(await _wait_until(func() -> bool:
+		return w.state == S.APRON and w.teammate.state == S.IDLE, 120), "tag finishes")
+
+
+func _count_out_wrestlers(outside: Array[Wrestler]) -> void:
+	GameState.rules = "normal"
+	m.count_period = 0.03
+	for i in outside.size():
+		outside[i].global_position = Vector3(4.2, 0.1, 1.5 + i)
+		outside[i].outside = true
+	assert_true(await _wait_until(func() -> bool: return m.winner != null, 180), "count-out finishes")
+	m._show_end_menu()
+
+
+func test_count_out_after_team_zero_tags_records_a_win() -> void:
+	await _tag_out_for_countout(a1)
+	await _count_out_wrestlers([b1])
+	assert_same(m.winner, a2, "the legal opponent wins, not the partner on the apron")
+	assert_eq(a2.state, S.CELEBRATE)
+	assert_eq(a1.state, S.APRON)
+	assert_eq(m.finish_reason, "COUNT-OUT")
+	assert_eq(m.career_result(), "win")
+	var title: Label = m._end_menu.get_child(0).get_child(0)
+	assert_eq(title.text, "ZIP VOLTA & THUNDER MACK WIN")
+
+
+func test_count_out_after_team_one_tags_records_a_loss() -> void:
+	await _tag_out_for_countout(b1)
+	await _count_out_wrestlers([a1])
+	assert_same(m.winner, b2, "the legal opponent wins, not the partner on the apron")
+	assert_eq(b2.state, S.CELEBRATE)
+	assert_eq(b1.state, S.APRON)
+	assert_eq(m.finish_reason, "COUNT-OUT")
+	assert_eq(m.career_result(), "loss")
+	var title: Label = m._end_menu.get_child(0).get_child(0)
+	assert_eq(title.text, "THUNDER MACK & BRUNO KESSLER WIN")
+
+
+func test_double_count_out_after_tags_remains_a_draw() -> void:
+	await _tag_out_for_countout(a1)
+	await _tag_out_for_countout(b1)
+	await _count_out_wrestlers([a2, b2])
+	assert_eq(m.finish_reason, "DOUBLE COUNT-OUT")
+	assert_eq(m.career_result(), "draw")
+	assert_eq(a2.state, S.DOWN)
+	assert_eq(b2.state, S.DOWN)
+	var title: Label = m._end_menu.get_child(0).get_child(0)
+	assert_eq(title.text, "DRAW")
+
+
+func test_count_out_during_team_zero_tag_records_a_win() -> void:
+	_put(a1, a1.entry_spot(), Vector3.BACK)
+	assert_true(a1._try_tag())
+	assert_eq(a2.state, S.APRON_ENTER)
+	GameState.rules = "normal"
+	b1.global_position = Vector3(4.2, 0.1, 1.5)
+	b1.outside = true
+	m._count = Match.COUNT_OUT - 1
+	m._count_out(m.count_period)
+	assert_same(m.winner, a2)
+	assert_eq(m.career_result(), "win", "the result does not depend on the tag animation")
+	m._show_end_menu()
+	var title: Label = m._end_menu.get_child(0).get_child(0)
+	assert_eq(title.text, "ZIP VOLTA & THUNDER MACK WIN")
+
+
+func test_count_out_during_team_one_tag_records_a_loss() -> void:
+	_put(b1, b1.entry_spot(), Vector3.BACK)
+	assert_true(b1._try_tag())
+	assert_eq(b2.state, S.APRON_ENTER)
+	GameState.rules = "normal"
+	a1.global_position = Vector3(4.2, 0.1, 1.5)
+	a1.outside = true
+	m._count = Match.COUNT_OUT - 1
+	m._count_out(m.count_period)
+	assert_same(m.winner, b2)
+	assert_eq(m.career_result(), "loss", "the result does not depend on the tag animation")
+	m._show_end_menu()
+	var title: Label = m._end_menu.get_child(0).get_child(0)
+	assert_eq(title.text, "THUNDER MACK & BRUNO KESSLER WIN")

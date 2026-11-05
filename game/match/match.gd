@@ -23,6 +23,7 @@ var replay: Replay
 var winner: Wrestler               ## set when the match ends (a wrestler even on a draw)
 var finish_reason := ""
 var _finished := false
+var _winning_team := -1            ## -1 for a draw or an unfinished match; independent of animations
 var tables: Array[FoldingTable] = []
 var chairs: Array[Chair] = []
 var _pin: Dictionary = {}          # {attacker, defender}
@@ -278,7 +279,11 @@ func _count_out(delta: float) -> void:
 			if teams_out.size() > 1:
 				_finish(null, null, "DOUBLE COUNT-OUT")
 			else:
-				_finish(out[0].opponents[0], out[0], "COUNT-OUT")
+				# The original opponent may have tagged out and be waiting on the apron.
+				for opponent in out[0].opponents:
+					if opponent.legal:
+						_finish(opponent, out[0], "COUNT-OUT")
+						break
 
 
 func _near_ropes(w: Wrestler) -> bool:
@@ -291,6 +296,7 @@ func _near_ropes(w: Wrestler) -> bool:
 
 func _finish(win: Wrestler, lose: Wrestler, reason: String = "") -> void:
 	winner = win if win else lose if lose else wrestlers[0]
+	_winning_team = win.team if win else -1
 	finish_reason = reason if reason != "" else "PINFALL"
 	_finished = true
 	_pin = {}
@@ -627,14 +633,14 @@ func _title_result(win: Wrestler) -> String:
 
 ## Career: how tonight went for you (team 0): "win", "loss" or "draw".
 func career_result() -> String:
-	if winner == null or winner.state != Wrestler.State.CELEBRATE:
+	if _winning_team < 0:
 		return "draw"
-	return "win" if winner.team == 0 else "loss"
+	return "win" if _winning_team == 0 else "loss"
 
 
 func _show_end_menu() -> void:
 	var title := "%s WIN%s" % [team_name(winner), "" if tag_mode else "S"] \
-		if winner.state == Wrestler.State.CELEBRATE else "DRAW"
+		if _winning_team >= 0 else "DRAW"
 	if GameState.career:
 		_end_menu = _menu(title, [["Continue", _back_to_career]])
 	else:

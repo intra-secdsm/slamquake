@@ -214,16 +214,11 @@ func test_a_tag_match_with_your_partner() -> void:
 func test_the_result_goes_back_to_the_career() -> void:
 	var m := _career_match(0)
 	await wait_physics_frames(2)
-	m.winner = m.wrestlers[0]
-	m.wrestlers[0].state = Wrestler.State.CELEBRATE
-	assert_eq(m.career_result(), "win")
-	m.wrestlers[0].state = Wrestler.State.IDLE
-	assert_eq(m.career_result(), "draw")
-	m.winner = m.wrestlers[1]
-	m.wrestlers[1].state = Wrestler.State.CELEBRATE
+	assert_eq(m.career_result(), "draw", "no result before the match ends")
+	m._finish(m.wrestlers[1], m.wrestlers[0], "COUNT-OUT")
 	assert_eq(m.career_result(), "loss")
 	# the career screen records it when it opens
-	GameState.career_result = "loss"
+	GameState.career_result = m.career_result()
 	var screen: Node = load("res://ui/career.tscn").instantiate()
 	add_child_autofree(screen)
 	await wait_frames(2)
