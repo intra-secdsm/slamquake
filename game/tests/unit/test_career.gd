@@ -104,6 +104,28 @@ func test_losing_the_title() -> void:
 	assert_eq(c.champion, challenger)
 
 
+func test_simulated_title_change_books_nobody_twice() -> void:
+	c.week = 3      # the PPV
+	assert_true(c.is_ppv())
+	assert_false(c.you in [c.champion, c.contender])
+	var champ := c.champion
+	var challenger := c.contender
+	var changes := 0
+	for i in 40:
+		c.champion = champ
+		c.contender = challenger
+		var rng := RandomNumberGenerator.new()
+		rng.seed = i
+		var lines: Array = c._simulate(rng, [c.you])
+		if c.champion != champ:
+			changes += 1
+		for id in c.roster:
+			var n := c.name_of(id)
+			var appearances := lines.filter(func(l: String) -> bool: return l.contains(n)).size()
+			assert_lte(appearances, 1, "%s booked once (seed %d)" % [n, i])
+	assert_gt(changes, 0, "at least one simulated title change was exercised")
+
+
 func test_tag_titles_after_two_tag_wins() -> void:
 	for month in 3:
 		c.week = month * 4 + 1
