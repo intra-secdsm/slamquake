@@ -1212,6 +1212,7 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 
 func _start_whipped(xform: Transform3D, dir: Vector3) -> void:
 	global_transform = xform
+	_update_region()
 	_set_solid(true)
 	_pair = {}
 	partner = null
@@ -1219,7 +1220,9 @@ func _start_whipped(xform: Transform3D, dir: Vector3) -> void:
 	_face(_run_dir, 0.0, true)
 	_whipped = true
 	_rebounds = 0
-	_corner = _corner_in_direction(global_position, _run_dir)
+	# an in-ring corner only exists for the canvas: a floor-level run is aimed at the
+	# barricade, not at a turnbuckle it can't reach (issue #14)
+	_corner = -1 if outside else _corner_in_direction(global_position, _run_dir)
 	_enter(State.WHIPPED, 0.0)
 
 
@@ -1236,8 +1239,10 @@ func _st_whipped(_delta: float) -> void:
 	_face(_run_dir, 0.0, true)
 	velocity.x = _run_dir.x * WHIP_SPEED
 	velocity.z = _run_dir.z * WHIP_SPEED
-	if _corner >= 0:
-		# home in on the turnbuckle; ropes don't matter on the way into a corner
+	if _corner >= 0 and not outside:
+		# home in on the turnbuckle; ropes don't matter on the way into a corner.
+		# never snap to an in-ring corner while outside, even if the timeout is reached
+		# first (issue #14)
 		var spot := _corner_spot(_corner)
 		var to := spot - global_position
 		to.y = 0
@@ -1947,8 +1952,26 @@ func _try_double_team(target: Wrestler) -> bool:
 	if _flat_len(target.global_position - global_position) > 1.8 or target.outside != outside:
 		return false
 	var mv := Grapples.get_move("double_suplex")
+	# The grab position decides where the tie-up is, not where the suplex plays: the
+	# anchor aligns to the region's surface, with the whole footprint (throwers straddling
+	# the anchor, the target's line) kept inside the region (issue #13).
 	var anchor := a._anchor
-	anchor.origin += _inside_shift(anchor, mv, target)
+	if outside:
+		anchor.origin += _outside_shift(anchor, mv, target)
+		# the throwers straddle the anchor along its x axis: keep the nearer one off the apron
+		var main := 0 if absf(anchor.origin.x) > absf(anchor.origin.z) else 2
+		var s := signf(anchor.origin[main])
+		if s == 0.0:
+			main = 2 if main == 0 else 0
+			s = 1.0
+		var rb := Ring.canvas_half() + 0.35
+		var near := anchor.origin[main] - absf(anchor.basis.x[main]) * 0.36
+		if near * s < rb:
+			anchor.origin[main] += (rb - near) * s
+		anchor.origin.y = 0.0
+	else:
+		anchor.origin += _inside_shift(anchor, mv, target)
+		anchor.origin.y = Ring.canvas_height()
 	var side := anchor.basis.x * 0.36
 	target._begin_paired(a, mv, anchor, "d")
 	a._begin_paired(target, mv, anchor.translated(side), "a")

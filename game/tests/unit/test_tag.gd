@@ -149,6 +149,45 @@ func test_double_team_suplex() -> void:
 	assert_true(a2.state in [S.GETUP, S.IDLE], "helper finished too")
 
 
+## A tie-up under the ring (floor level, inside the canvas footprint) must not make the
+## double suplex play there: the anchor aligns to the region instead of the grab position
+## (issue #13).
+func test_double_team_under_the_ring_plays_in_the_region() -> void:
+	# place, flag and lock within one frame: non-scripted states would confine the pair
+	# back to the canvas (inside) or past the apron (outside)
+	a1.global_position = Vector3(2.7, 0.02, 0.0)
+	b1.global_position = Vector3(3.3, 0.02, 0.0)
+	a1._face(Vector3.RIGHT, 0.0, true)
+	b1._face(Vector3.LEFT, 0.0, true)
+	a1.outside = true
+	b1.outside = true
+	var anchor := a1._flat_xform()
+	b1._lock(a1, anchor, S.HELD, "tieup_d")
+	a1._lock(b1, anchor, S.TIEUP, "tieup_a")
+	a2.global_position = Vector3(4.0, 0.02, 0.6)
+	a2.outside = true
+	a2._enter(S.IDLE)
+	await wait_physics_frames(2)
+	var hp := b1.health
+	watch_signals(a2)
+	(a2.controller as Scripted).press = "grapple"
+	await wait_physics_frames(2)
+	assert_signal_emitted(a2, "double_team")
+	# while the suplex plays, nobody may stand on the floor under the canvas
+	var under_canvas := false
+	for i in 240:
+		for w in [a1, a2, b1]:
+			var p: Vector3 = w.global_position
+			if absf(p.x) < Ring.canvas_half() - 0.1 and absf(p.z) < Ring.canvas_half() - 0.1 \
+					and p.y < Ring.canvas_height() - 0.05:
+				under_canvas = true
+		if b1.state == S.DOWN:
+			break
+		await wait_physics_frames(1)
+	assert_false(under_canvas, "the double team must not play under the ring canvas")
+	assert_lt(b1.health, hp - 10.0)
+
+
 func test_pinning_the_legal_man_wins_for_the_team() -> void:
 	_put(a1, Vector3(0, 0, 0), Vector3.RIGHT)
 	_put(b1, Vector3(1.2, 0, 0), Vector3.LEFT)
