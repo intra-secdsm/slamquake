@@ -282,7 +282,9 @@ func beats() -> Array:
 
 ## Record tonight's result ("win", "loss" or "draw"), run the rest of the show, move on
 ## a week and save. Returns what happened:
-##   {result, headline, results: [text...], beats: [...], unlocked: [names...]}
+##   {result, headline, results: [text...], beats: [...], unlocked: [names...],
+##    saved: bool}     # the progress is in memory either way; saved says whether the
+##                     # file caught up (a failed save can be retried from the screen)
 func record(result: String) -> Dictionary:
 	var c := card()
 	var rng := _rng(2)
@@ -350,7 +352,7 @@ func record(result: String) -> Dictionary:
 	week += 1
 	if week_in_month() == 0:
 		_start_month()
-	save()
+	report["saved"] = save()      # the career itself is never rolled back on a failed write
 	return report
 
 
