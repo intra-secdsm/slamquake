@@ -240,8 +240,6 @@ void fragment() {
 			// cyber: metal plates over the right eye, temple and cheekbone, with glowing circuit
 			// traces running off them and a glowing ring round the eye
 			vec2 c = vec2(-hu, z);
-			float plate = max(max(0.012 - c.x, c.x - 0.128), max(1.748 - z, z - 1.876));
-			plate = max(plate, dot(c - vec2(0.012, 1.795), vec2(-0.8, -0.6)));
 			float outline = max(max(0.012 - c.x, c.x - 0.128), max(1.748 - z, z - 1.876));
 			outline = max(outline, dot(c - vec2(0.012, 1.795), vec2(-0.8, -0.6)));
 			plate = head * fill(outline, px);

@@ -137,6 +137,36 @@ func test_perched_wrestler_can_be_knocked_off() -> void:
 	assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "fell to the canvas")
 
 
+## Knocked off the top rope, a wrestler is "down" and in the ring region while still in
+## the air. Picking them up then would lift the attacker onto that airborne anchor, so
+## ground moves also need a similar height (issue #2 follow-up).
+func test_no_pickup_of_a_wrestler_falling_off_the_turnbuckle() -> void:
+	var corner := Ring.corner(1)
+	_place(a, Vector3(corner.x + 0.6, Ring.canvas_height(), corner.z - 0.6), Vector3(-1, 0, 1).normalized())
+	_place(b, Vector3(0, Ring.canvas_height(), -2.5), Vector3.FORWARD)
+	await wait_physics_frames(2)
+	ca.press = "grapple"
+	assert_true(await _wait_until(func() -> bool: return a.state == S.PERCH, 120), "perched")
+	_place(b, a.global_position + Vector3(0.7, 0, -0.7), Vector3(-1, 0, 1).normalized())
+	b.global_position.y = Ring.canvas_height()
+	await wait_physics_frames(1)
+	a.receive_strike(b, Strikes.get_move("jab"))
+	assert_eq(a.state, S.KNOCKDOWN, "knocked off the top")
+	# the setup this test is about: down, same region, in flat reach, but well above the canvas
+	assert_true(a.is_down())
+	assert_eq(a.outside, b.outside, "both count as in the ring")
+	assert_gt(a.global_position.y - b.global_position.y, Wrestler.GROUND_REACH_Y, "still in the air")
+	assert_lt(a.distance_to_body(b.global_position), Wrestler.GROUND_RANGE, "in flat ground reach")
+	cb.press = "grapple"
+	for i in 10:
+		await wait_physics_frames(1)
+		assert_ne(b.state, S.PAIRED, "no pickup of an airborne opponent (frame %d)" % i)
+		assert_almost_eq(b.global_position.y, Ring.canvas_height(), 0.1,
+			"attacker stays on the canvas (frame %d)" % i)
+	assert_true(await _wait_until(func() -> bool: return a.state == S.DOWN, 90), "landed")
+	assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "fell to the canvas")
+
+
 func test_chair_shot_is_a_disqualification_in_normal_rules() -> void:
 	var chair := m.chairs[0]
 	_place(a, chair.global_position + Vector3(0.6, 0, 0), Vector3.LEFT)
@@ -213,6 +243,116 @@ func test_thrown_over_the_top_lands_inside_the_barricade() -> void:
 		assert_true(b.outside)
 		assert_lt(absf(b.global_position.z), wall - 0.3, "this side of the barricade (turned %.1f)" % turn)
 		assert_lt(absf(b.global_position.x), wall - 0.3)
+
+
+## Issue #2: a paired move clamps its anchor to the attacker's region, so a ground move or
+## running grapple across the ropes used to teleport the other wrestler across with them.
+
+## Waits for `a`'s action to start and settle back to IDLE; reports whether either wrestler
+## entered a paired move along the way.
+func _wait_action_settled(frames: int) -> bool:
+	var saw_paired := false
+	var started := false
+	for i in frames:
+		if a.state != S.IDLE:
+			started = true
+		if a.state == S.PAIRED or b.state == S.PAIRED:
+			saw_paired = true
+		if started and a.state == S.IDLE:
+			break
+		await wait_physics_frames(1)
+	assert_true(started, "action resolved")
+	return saw_paired
+
+
+## (The z offsets keep the scenarios clear of the ringside table, which sits at z = 0.)
+
+func test_ground_offence_cannot_cross_ropes_ring_to_floor() -> void:
+	# downed on the floor just past the apron; attacker at the ropes inside
+	_place(a, Vector3(lim - 0.2, Ring.canvas_height(), -1.2), Vector3.RIGHT)
+	_place(b, Vector3(Ring.canvas_half() + 0.5, 0.0, -1.2), Vector3.LEFT)
+	b.outside = true
+	b._go_down(20.0)
+	await wait_physics_frames(2)
+	for press in ["punch", "kick", "grapple"]:
+		ca.press = press
+		assert_false(await _wait_action_settled(90), "no paired move for %s" % press)
+		assert_eq(b.state, S.DOWN, "opponent untouched after %s" % press)
+		assert_true(b.outside)
+		assert_lt(b.global_position.y, 0.3, "still on the floor after %s" % press)
+		assert_almost_eq(b.global_position.x, Ring.canvas_half() + 0.5, 0.1, "not dragged to the canvas")
+
+
+func test_ground_offence_cannot_cross_ropes_floor_to_ring() -> void:
+	# mirror of the above: downed inside the ropes, attacker standing on the floor
+	_place(b, Vector3(lim - 0.2, Ring.canvas_height(), -1.2), Vector3.LEFT)
+	b._go_down(20.0)
+	_place(a, Vector3(Ring.canvas_half() + 0.5, 0.0, -1.2), Vector3.LEFT)
+	a.outside = true
+	await wait_physics_frames(2)
+	for press in ["punch", "kick", "grapple"]:
+		ca.press = press
+		assert_false(await _wait_action_settled(90), "no paired move for %s" % press)
+		assert_eq(b.state, S.DOWN, "opponent untouched after %s" % press)
+		assert_false(b.outside)
+		assert_almost_eq(b.global_position.y, Ring.canvas_height(), 0.1, "still on the canvas")
+
+
+func test_running_grapple_cannot_cross_ropes() -> void:
+	# a runner on the floor sprinting at an inside wrestler no longer picks up a back-body-drop
+	_place(a, Vector3(lim - 0.4, Ring.canvas_height(), -1.5), Vector3.RIGHT)
+	_place(b, Vector3(Ring.canvas_half() + 1.2, 0.0, -1.5), Vector3.LEFT)
+	b.outside = true
+	cb.hold_run = true
+	cb.hold_move = Vector3.LEFT
+	assert_true(await _wait_until(func() -> bool: return b.state == S.RUN, 30), "runner is running")
+	# the runner reaches the apron edge (and grapple range) a moment later
+	var in_range := func() -> bool:
+		return Vector2(b.global_position.x - a.global_position.x,
+			b.global_position.z - a.global_position.z).length() < 1.8
+	assert_true(await _wait_until(in_range, 60), "runner in range")
+	ca.press = "grapple"
+	assert_false(await _wait_action_settled(90), "no back-body-drop across the ropes")
+	assert_true(b.outside)
+	assert_lt(b.global_position.y, 0.3, "runner not lifted onto the canvas")
+	cb.hold_run = false
+	cb.hold_move = Vector3.ZERO
+
+
+func test_running_grapple_cannot_cross_ropes_mirror() -> void:
+	# the mirror: an in-ring runner at the ropes cannot be back-body-dropped onto the floor
+	_place(a, Vector3(Ring.canvas_half() + 0.35, 0.0, -1.5), Vector3.LEFT)
+	a.outside = true
+	# start the runner well inside its in-range window (it runs for a few frames before the
+	# ropes stop it, and the floor attacker never moves on its own)
+	_place(b, Vector3(1.2, Ring.canvas_height(), -1.5), Vector3.RIGHT)
+	cb.hold_run = true
+	cb.hold_move = Vector3.RIGHT
+	var in_range := func() -> bool:
+		return Vector2(b.global_position.x - a.global_position.x,
+			b.global_position.z - a.global_position.z).length() < 1.8
+	assert_true(await _wait_until(func() -> bool: return b.is_running() and in_range.call(), 40),
+		"runner in range")
+	ca.press = "grapple"
+	assert_false(await _wait_action_settled(90), "no back-body-drop across the ropes")
+	assert_false(b.outside)
+	assert_almost_eq(b.global_position.y, Ring.canvas_height(), 0.1, "runner not dumped to the floor")
+	cb.hold_run = false
+	cb.hold_move = Vector3.ZERO
+
+
+func test_ground_moves_still_work_within_the_same_region() -> void:
+	# same-region ground offence must keep working: a floor punch on a floor opponent
+	_place(a, Vector3(4.4, 0.0, 2.4), Vector3.RIGHT)
+	_place(b, Vector3(5.5, 0.0, 2.4), Vector3.RIGHT)
+	a.outside = true
+	b.outside = true
+	b._go_down(20.0)
+	await wait_physics_frames(2)
+	ca.press = "punch"
+	assert_true(await _wait_until(func() -> bool: return a.state == S.PAIRED, 30), "ground punch started")
+	assert_lt(a.global_position.y, 0.3, "attacker stayed on the floor")
+	assert_lt(b.global_position.y, 0.3, "opponent stayed on the floor")
 
 
 func test_cpu_with_a_chair_squares_up_before_swinging() -> void:

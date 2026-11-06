@@ -104,6 +104,28 @@ func test_losing_the_title() -> void:
 	assert_eq(c.champion, challenger)
 
 
+func test_simulated_title_change_books_nobody_twice() -> void:
+	c.week = 3      # the PPV
+	assert_true(c.is_ppv())
+	assert_false(c.you in [c.champion, c.contender])
+	var champ := c.champion
+	var challenger := c.contender
+	var changes := 0
+	for i in 40:
+		c.champion = champ
+		c.contender = challenger
+		var rng := RandomNumberGenerator.new()
+		rng.seed = i
+		var lines: Array = c._simulate(rng, [c.you])
+		if c.champion != champ:
+			changes += 1
+		for id in c.roster:
+			var n := c.name_of(id)
+			var appearances := lines.filter(func(l: String) -> bool: return l.contains(n)).size()
+			assert_lte(appearances, 1, "%s booked once (seed %d)" % [n, i])
+	assert_gt(changes, 0, "at least one simulated title change was exercised")
+
+
 func test_tag_titles_after_two_tag_wins() -> void:
 	for month in 3:
 		c.week = month * 4 + 1
@@ -228,6 +250,36 @@ func test_the_result_goes_back_to_the_career() -> void:
 	assert_eq(GameState.career_result, "", "recorded once")
 	screen._on_row_pressed(0)       # Continue
 	assert_true(screen._page in ["hub", "story"])
+
+
+## An outcome promo after a match belongs to the show just finished; it must not use up the
+## next show's introduction (issue #5). Results -> outcome promo -> hub -> next week's story.
+func test_an_outcome_promo_does_not_skip_the_next_shows_story() -> void:
+	c.week = 3                      # the month's PPV grudge match
+	assert_eq(c.card()["kind"], "grudge")
+	GameState.set_meta("career_story_week", 3)     # its build-up already played at the hub
+	GameState.career = c
+	GameState.career_result = "win"
+	var screen: Node = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	assert_eq(screen._page, "results")
+	assert_eq(c.week, 4, "on to next month's first show")
+	var outcome: Array = screen._report["beats"].filter(func(b: Dictionary) -> bool: return not b["lines"].is_empty())
+	assert_false(outcome.is_empty(), "the grudge win has an outcome promo")
+	var intro := c.beats()
+	assert_false(intro.is_empty(), "next month's show has its own introduction")
+	screen._on_row_pressed(0)       # Continue
+	assert_eq(screen._page, "story", "the outcome promo plays")
+	assert_eq(screen._scenes[0]["lines"], outcome[0]["lines"])
+	screen._end_story()
+	assert_eq(screen._page, "story", "then the next show's introduction plays")
+	var now_playing: Array = screen._scenes[0]["lines"] if not screen._scenes.is_empty() else []
+	assert_eq(now_playing, intro[0]["lines"])
+	screen._end_story()
+	assert_eq(screen._page, "hub", "each story plays once")
+	screen._show_hub()
+	assert_eq(screen._page, "hub", "and is not repeated on the way back to the hub")
 
 
 func test_a_career_as_a_created_wrestler() -> void:

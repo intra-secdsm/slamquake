@@ -148,6 +148,7 @@ func _show_hub() -> void:
 	AudioDirector.play_music("theme_anthem" if career.is_ppv() else "theme_menu", 0.6, true, AudioDirector.MENU_DB)
 	var beats := career.beats()
 	if not beats.is_empty() and not _seen_story():
+		_mark_story_seen()
 		_play_story(beats, _show_hub)
 		return
 	var card := career.card()
@@ -181,9 +182,15 @@ func _titantron() -> void:
 		GOLD if ppv else PINK, CYAN, "stars" if ppv else "grid")
 
 
-## Story scenes play once per week: remember which week was last told.
+## The week's own story scenes play once, from the hub: remember which week was last told.
+## (Only the hub marks it. A results screen's outcome promo belongs to the show just
+## finished, and by then the career has already moved on to next week's show.)
 func _seen_story() -> bool:
 	return GameState.get_meta("career_story_week", -1) == career.week
+
+
+func _mark_story_seen() -> void:
+	GameState.set_meta("career_story_week", career.week)
 
 
 func _play_match() -> void:
@@ -300,8 +307,6 @@ func _play_story(beats: Array, then: Callable) -> void:
 	_page = "story"
 	_scenes = beats.duplicate()
 	_after_story = then
-	if career:
-		GameState.set_meta("career_story_week", career.week)
 	_panel.visible = false
 	_caption.visible = true
 	for b in _rows:
@@ -550,12 +555,13 @@ func _dev_page(page: String) -> void:
 	match page:
 		"new": _show_new()
 		"hub":
-			GameState.set_meta("career_story_week", career.week)
+			_mark_story_seen()
 			_show_hub()
 			if DevTools.has_arg("career_play"):  # dev: straight to the ring
 				_play_match()
 		"story":
 			var beats := career.beats()
+			_mark_story_seen()
 			_play_story(beats, _show_hub)
 			for k in int(DevTools.get_arg("career_line", "0")):
 				_words.visible_ratio = 1.0

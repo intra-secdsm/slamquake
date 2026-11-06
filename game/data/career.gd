@@ -375,6 +375,8 @@ func _unlock(id: String, report: Dictionary) -> bool:
 func _simulate(rng: RandomNumberGenerator, busy: Array) -> Array:
 	var out := []
 	if is_ppv() and not you in [champion, contender] and contender != "" and contender != champion:
+		# book both title participants before the belt can change hands
+		busy = busy + [champion, contender]
 		var champ_wins := rng.randf() < _odds(champion, contender)
 		if champ_wins:
 			_score(champion, true, PPV_WIN_POINTS)
@@ -386,7 +388,6 @@ func _simulate(rng: RandomNumberGenerator, busy: Array) -> Array:
 			_score(champion, true, PPV_WIN_POINTS)
 			_score(old, false, PPV_WIN_POINTS)
 			out.append("WORLD TITLE: %s defeated %s. NEW CHAMPION!" % [name_of(champion), name_of(old)])
-		busy = busy + [champion, contender]
 	var free: Array = roster.filter(func(id: String) -> bool: return not id in busy)
 	_shuffle(free, rng)
 	for i in range(0, mini(free.size() - 1, SIM_MATCHES * 2), 2):
