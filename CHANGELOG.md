@@ -2,8 +2,8 @@
 
 ## 1.01 (2026-11-06)
 
-A bug-fix release. Saves, matches and controls are unchanged, and 1.0 career and Create-a-Wrestler
-saves carry over as they are.
+A bug-fix release. Controls and save files are unchanged: 1.0 career and Create-a-Wrestler saves
+carry over as they are.
 
 ### Matches
 - **Wrestler height no longer throws off ring exits and climbs.** Tall wrestlers sank into the
