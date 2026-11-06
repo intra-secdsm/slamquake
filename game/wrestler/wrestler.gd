@@ -1947,8 +1947,26 @@ func _try_double_team(target: Wrestler) -> bool:
 	if _flat_len(target.global_position - global_position) > 1.8 or target.outside != outside:
 		return false
 	var mv := Grapples.get_move("double_suplex")
+	# The grab position decides where the tie-up is, not where the suplex plays: the
+	# anchor aligns to the region's surface, with the whole footprint (throwers straddling
+	# the anchor, the target's line) kept inside the region (issue #13).
 	var anchor := a._anchor
-	anchor.origin += _inside_shift(anchor, mv, target)
+	if outside:
+		anchor.origin += _outside_shift(anchor, mv, target)
+		# the throwers straddle the anchor along its x axis: keep the nearer one off the apron
+		var main := 0 if absf(anchor.origin.x) > absf(anchor.origin.z) else 2
+		var s := signf(anchor.origin[main])
+		if s == 0.0:
+			main = 2 if main == 0 else 0
+			s = 1.0
+		var rb := Ring.canvas_half() + 0.35
+		var near := anchor.origin[main] - absf(anchor.basis.x[main]) * 0.36
+		if near * s < rb:
+			anchor.origin[main] += (rb - near) * s
+		anchor.origin.y = 0.0
+	else:
+		anchor.origin += _inside_shift(anchor, mv, target)
+		anchor.origin.y = Ring.canvas_height()
 	var side := anchor.basis.x * 0.36
 	target._begin_paired(a, mv, anchor, "d")
 	a._begin_paired(target, mv, anchor.translated(side), "a")
