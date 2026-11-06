@@ -111,6 +111,21 @@ func test_height_changes_do_not_accumulate() -> void:
 		_assert_root(m, "climb_corner", true)
 
 
+func test_invalid_heights_keep_the_last_valid_correction() -> void:
+	var m := _model(1.12)
+	for bad in [0.0, -1.0, INF, NAN]:
+		m.look.height = bad
+		m.apply_look()
+		assert_eq(m._absolute_root_height, 1.12, "height %s is ignored" % bad)
+		for c in m._absolute_root:
+			var a: Animation = c["anim"]
+			for k in a.track_get_key_count(c["track"]):
+				assert_true(a.track_get_key_value(c["track"], k).is_finite(), "height %s: finite keys" % bad)
+	m.look.height = 1.12   # a no-op for the clips: they must still hold the 1.12 correction
+	m.apply_look()
+	_assert_root(m, "exit_ring", true)
+
+
 # ---------------------------------------------------------------- in a match
 
 func _match_wrestler(height: float) -> Array:

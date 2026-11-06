@@ -192,7 +192,10 @@ func _own_absolute_root_clips(anims: Dictionary) -> void:
 ## exactly the authored height: rest + (y - rest) / height, which scales back up to
 ## height * rest + (y - rest).
 func _set_absolute_root_height(height: float) -> void:
-	if is_equal_approx(height, _absolute_root_height) or height <= 0.0:
+	if not is_finite(height) or height <= 0.0:
+		push_warning("WrestlerModel: invalid height %s; keeping the last valid root motion" % height)
+		return
+	if is_equal_approx(height, _absolute_root_height):
 		return
 	_absolute_root_height = height
 	for c in _absolute_root:

@@ -26,6 +26,10 @@ var b: Wrestler
 var ca: Scripted
 var cb: Scripted
 var lim: float
+## Bare unmodified model at the origin: its animations are the authored (1.0 scale)
+## source, so its root curve is the absolute reference for issue #8 checks.
+var ref: Node3D
+var ref_tracks: Dictionary = {}   # anim name -> root position track index
 
 
 func before_each() -> void:
@@ -45,6 +49,11 @@ func before_each() -> void:
 	a.infinite_health = false
 	b.infinite_health = false
 	lim = float(Ring.spec()["post_half"]) - Wrestler.ROPE_MARGIN
+	ref = WrestlerModel.MODEL_SCENE.instantiate()
+	add_child_autofree(ref)
+	for name in ["exit_ring", "enter_ring", "climb_corner", "climb_down"]:
+		ref_tracks[name] = _root_track_of(ref.get_node("AnimationPlayer").get_animation(name))
+	assert_gte(ref_tracks["exit_ring"], 0, "reference has resolvable root tracks")
 	await wait_physics_frames(3)
 
 
@@ -59,6 +68,60 @@ func _wait_until(cond: Callable, max_frames: int) -> bool:
 			return true
 		await wait_physics_frames(1)
 	return cond.call()
+
+
+func _root_track_of(anim: Animation) -> int:
+	for i in anim.get_track_count():
+		if anim.track_get_type(i) == Animation.TYPE_POSITION_3D and String(anim.track_get_path(i)).ends_with(":root"):
+			return i
+	return -1
+
+
+## Authored root Y of `name` at time `t` (linear key interpolation, matching the
+## imported tracks), read from the untouched reference animation.
+func _ref_y_at(name: String, t: float) -> float:
+	var ap: AnimationPlayer = ref.get_node("AnimationPlayer")
+	var anim: Animation = ap.get_animation(name)
+	var ti: int = ref_tracks[name]
+	var k := 0
+	var n := anim.track_get_key_count(ti)
+	while k + 1 < n and anim.track_get_key_time(ti, k + 1) < t:
+		k += 1
+	var t0: float = anim.track_get_key_time(ti, k)
+	var v0: Vector3 = anim.track_get_key_value(ti, k)
+	var k1 := mini(k + 1, n - 1)
+	var t1: float = anim.track_get_key_time(ti, k1)
+	var v1: Vector3 = anim.track_get_key_value(ti, k1)
+	if is_zero_approx(t1 - t0):
+		return v0.y
+	return lerpf(v0.y, v1.y, clampf((t - t0) / (t1 - t0), 0.0, 1.0))
+
+
+## World-space Y of the wrestler's root bone (body, not the game node).
+func _root_world(w: Wrestler) -> float:
+	var sk: Skeleton3D = w.model.skeleton
+	return (sk.global_transform * sk.get_bone_global_pose(sk.find_bone("root"))).origin.y
+
+
+func _set_height(w: Wrestler, h: float) -> void:
+	var l := w.model.look.duplicate()
+	l.height = h
+	w.model.look = l
+
+
+## Samples a root-motion state mid-clip: the body's world root Y must equal the
+## authored absolute curve (reference model) offset by the state's start height, at
+## every supported height - never the height-scaled curve.
+func _sample_root_state(anim: String, start_y: float, h: float) -> bool:
+	var length: float = a.model.anim_player.get_animation(anim).length
+	for f in [0.35, 0.65, 0.9]:
+		var target: float = f * length
+		assert_true(await _wait_until(func() -> bool: return a.model.anim_player.current_animation_position >= target, 90),
+			"%s reached t=%.2f (h=%.2f)" % [anim, target, h])
+		var t: float = a.model.anim_player.current_animation_position
+		assert_almost_eq(_root_world(a) - start_y, _ref_y_at(anim, t), 0.03,
+			"%s root is absolute at t=%.2f (h=%.2f)" % [anim, t, h])
+	return true
 
 
 func test_push_into_ropes_rolls_out_then_back_in() -> void:
@@ -380,3 +443,50 @@ func test_route_back_in_steps_round_the_steel_steps() -> void:
 		var v := a.route_into_ring()
 		assert_eq(signf(v.z), -signf(start.z), "from %s, along the side away from the steps (%s)" % [start, v])
 		assert_gt(absf(v.z), 0.8)
+
+
+## Issue #8: the roll out of the ring and the climb back in are driven by clips whose
+## root motion encodes the absolute canvas-to-floor travel. For every supported height
+## the body must follow that authored curve (not a height-scaled one), and the landing
+## must be at the arena's absolute floor/canvas height.
+func test_exit_and_enter_root_motion_is_absolute_for_all_heights() -> void:
+	for h in [0.88, 1.0, 1.12]:
+		_set_height(a, h)
+		_place(b, Vector3(-2, Ring.canvas_height(), -2), Vector3.FORWARD)
+		_place(a, Vector3(lim - 0.2, Ring.canvas_height(), 0.3), Vector3.RIGHT)
+		ca.hold_move = Vector3.RIGHT
+		assert_true(await _wait_until(func() -> bool: return a.state == S.EXIT_RING, 90), "exit started (h=%.2f)" % h)
+		assert_true(await _sample_root_state("exit_ring", Ring.canvas_height(), h))
+		ca.hold_move = Vector3.ZERO
+		assert_true(await _wait_until(func() -> bool: return a.state == S.IDLE, 150), "landed (h=%.2f)" % h)
+		assert_true(a.outside, "on the floor (h=%.2f)" % h)
+		assert_almost_eq(a.global_position.y, 0.0, 0.05, "floor is absolute (h=%.2f)" % h)
+		ca.hold_move = Vector3.LEFT
+		assert_true(await _wait_until(func() -> bool: return a.state == S.ENTER_RING, 90), "enter started (h=%.2f)" % h)
+		assert_true(await _sample_root_state("enter_ring", 0.0, h))
+		ca.hold_move = Vector3.ZERO
+		assert_true(await _wait_until(func() -> bool: return a.state == S.IDLE, 150), "climbed back in (h=%.2f)" % h)
+		assert_false(a.outside, "back in the ring (h=%.2f)" % h)
+		assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.05, "canvas is absolute (h=%.2f)" % h)
+
+
+## Issue #8: the turnbuckle climb and the climb back down are the same contract at the
+## top rope: the body tracks the authored absolute curve from the node's start height.
+func test_climb_and_climb_down_root_motion_is_absolute_for_all_heights() -> void:
+	var corner := Ring.corner(0)
+	for h in [0.88, 1.0, 1.12]:
+		_set_height(a, h)
+		_place(b, Vector3(-3, Ring.canvas_height(), -3), Vector3.FORWARD)
+		_place(a, Vector3(corner.x - 0.6, Ring.canvas_height(), corner.z - 0.6), Vector3(1, 0, 1).normalized())
+		ca.hold_move = Vector3.ZERO
+		ca.press = "grapple"
+		assert_true(await _wait_until(func() -> bool: return a.state == S.CLIMB, 120), "climb started (h=%.2f)" % h)
+		assert_true(await _sample_root_state("climb_corner", Ring.canvas_height(), h))
+		assert_true(await _wait_until(func() -> bool: return a.state == S.PERCH, 120), "perched (h=%.2f)" % h)
+		assert_almost_eq(a.global_position.y, Ring.canvas_height() + 1.25, 0.1, "top rope is absolute (h=%.2f)" % h)
+		ca.press = "grapple"
+		assert_true(await _wait_until(func() -> bool: return a.state == S.CLIMB_DOWN, 120), "climb down started (h=%.2f)" % h)
+		var start_y: float = a.global_position.y
+		assert_true(await _sample_root_state("climb_down", start_y, h))
+		assert_true(await _wait_until(func() -> bool: return a.state == S.IDLE, 150), "back on the canvas (h=%.2f)" % h)
+		assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "canvas is absolute (h=%.2f)" % h)
