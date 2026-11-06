@@ -26,6 +26,10 @@ var _body_mat := ShaderMaterial.new()
 var _hair_mat := ShaderMaterial.new()
 var _eyes_mat := ShaderMaterial.new()
 var _model: Node3D
+# Clips that end at another arena level (floor, apron, turnbuckle): this model's own copy of each,
+# with the root track's index and the untouched source key heights. See _set_absolute_root_height().
+var _absolute_root: Array[Dictionary] = []
+var _absolute_root_height := 1.0
 
 
 func _ready() -> void:
@@ -68,6 +72,7 @@ func set_belt(kind: int) -> void:
 func apply_look() -> void:
 	var l := look
 	_model.scale = Vector3.ONE * l.height
+	_set_absolute_root_height(l.height)
 	_set_blend("heavy", maxf(l.mass, 0.0))
 	_set_blend("slim", maxf(-l.mass, 0.0))
 	_set_blend("muscle", l.muscle)
@@ -151,3 +156,51 @@ func _setup_animations() -> void:
 		if anim_player.has_animation(anim_name):
 			var a := anim_player.get_animation(anim_name)
 			a.loop_mode = Animation.LOOP_LINEAR if anims[anim_name]["loop"] else Animation.LOOP_NONE
+	_own_absolute_root_clips(anims)
+
+
+## The whole model is scaled by the wrestler's height, root motion included. That's right for
+## distances, but a clip that ends at a different height (rolling out to the floor, climbing a
+## turnbuckle) travels between arena levels whose heights are the same for everybody, and the
+## game places the wrestler there absolutely (Grapples.root_xform). So this model gets its own
+## copies of those clips (the imported ones are shared by every wrestler) and their root height
+## keys are divided by the height in _set_absolute_root_height(). Clips that lift the root but
+## come back down (carries, lifts) keep scaling with the body.
+func _own_absolute_root_clips(anims: Dictionary) -> void:
+	var root_bone := skeleton.find_bone("root")
+	var track_path := NodePath("%s:root" % _model.get_path_to(skeleton))
+	var source := anim_player.get_animation_library(&"")
+	var lib := AnimationLibrary.new()
+	for anim_name in source.get_animation_list():
+		var a := source.get_animation(anim_name)
+		var info: Dictionary = anims.get(String(anim_name), {})
+		if info.has("root_end") and absf(float(info["root_end"]["pos"][1])) > 0.001:
+			var t := a.find_track(track_path, Animation.TYPE_POSITION_3D)
+			assert(t >= 0 and not a.track_is_compressed(t), "editable root track in " + anim_name)
+			var heights := PackedFloat32Array()
+			for k in a.track_get_key_count(t):
+				heights.append(a.track_get_key_value(t, k).y)
+			a = a.duplicate()
+			_absolute_root.append({"anim": a, "track": t, "heights": heights,
+				"rest": skeleton.get_bone_rest(root_bone).origin.y})
+		lib.add_animation(anim_name, a)
+	anim_player.remove_animation_library(&"")
+	anim_player.add_animation_library(&"", lib)
+
+
+## Rewrites the owned clips' root heights from the source keys, so that the scaled model travels
+## exactly the authored height: rest + (y - rest) / height, which scales back up to
+## height * rest + (y - rest).
+func _set_absolute_root_height(height: float) -> void:
+	if is_equal_approx(height, _absolute_root_height) or height <= 0.0:
+		return
+	_absolute_root_height = height
+	for c in _absolute_root:
+		var a: Animation = c["anim"]
+		var t: int = c["track"]
+		var rest: float = c["rest"]
+		var heights: PackedFloat32Array = c["heights"]
+		for k in heights.size():
+			var p: Vector3 = a.track_get_key_value(t, k)
+			p.y = rest + (heights[k] - rest) / height
+			a.track_set_key_value(t, k, p)
