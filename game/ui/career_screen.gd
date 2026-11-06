@@ -36,6 +36,9 @@ var _words: Label
 var _typing: Tween
 # results waiting to be shown after the story scenes
 var _report := {}
+# the in-memory career is ahead of the (unwritable) save file: the screen reports it,
+# offers a retry, and an explicit discard is required before the career can go away
+var _save_failed := false
 
 
 func _ready() -> void:
@@ -62,7 +65,10 @@ func _ready() -> void:
 		var result := GameState.career_result
 		GameState.career_result = ""
 		GameState.end_career_match()
-		_show_results(career.record(result))
+		var report := career.record(result)
+		if not report.get("saved", true):
+			_save_failed = true
+		_show_results(report)
 	elif career:
 		GameState.end_career_match()
 		_show_hub()
@@ -137,9 +143,51 @@ func _new_preview() -> void:
 
 func _start_career() -> void:
 	career = Career.start(Roster.get_entry(_pick)["id"], _level)
-	career.save()
 	GameState.career = career
-	_show_hub()
+	if career.save():
+		_show_hub()
+	else:
+		_save_failed = true
+		_show_save_failed()
+
+
+func _retry_save() -> void:
+	if career.save():
+		_save_failed = false
+		_show_hub()
+	elif _page != "save_failed":
+		_show_save_failed()
+	else:
+		_refresh()
+
+
+func _discard_career() -> void:
+	career = null
+	GameState.career = null
+	_save_failed = false
+	_confirm = ""
+	_show_start()
+
+
+## The failure page: a broken save file with progress still in memory. Leaving is a
+## choice, not a side effect: retry the save, or discard the progress (issue #16).
+func _show_save_failed() -> void:
+	_page = "save_failed"
+	_confirm = ""
+	AudioDirector.play_music("theme_menu", 0.6, true, AudioDirector.MENU_DB)
+	_layout("COULDN'T SAVE", career.name_of(career.you) + "  ·  " + career.date_text())
+	_body.text = "The career save file can't be written.\nYour progress is kept in memory for this session.\n" \
+			+ "Fix the problem, then retry the save — or discard the progress."
+	_build([
+		{"text": "Retry save", "press": _retry_save},
+		{"text": func() -> String: return "Really discard? Press again" if _confirm == "discard" else "Discard progress",
+			"press": func() -> void:
+				if _confirm == "discard":
+					_discard_career()
+				else:
+					_confirm = "discard"
+					_refresh()},
+	])
 
 
 func _show_hub() -> void:
@@ -157,6 +205,8 @@ func _show_hub() -> void:
 	var us: Array = [career.you] + ([card["partner"]] if card["partner"] != "" else [])
 	var lines := "[color=#ffd400]TONIGHT: %s[/color]\n[b]%s[/b]\n[i]vs[/i]\n[b]%s[/b]\n\n%s" % [card["label"],
 		" & ".join(us.map(_who)), " & ".join((card["opponents"] as Array).map(_who)), _standing(career)]
+	if _save_failed:
+		lines += "\n[color=#ff3b4e]⚠ THE LAST SAVE FAILED — your progress is not in the file yet.[/color]"
 	_body.text = lines
 	var looks := []
 	var belts := []
@@ -165,14 +215,22 @@ func _show_hub() -> void:
 		looks.append(career.entry(id)["look"])
 		belts.append(belt_of.get(id, 0))
 	_stage.show_lineup(looks, belts)
-	_build([
-		{"text": "★  TO THE RING  ★", "press": _play_match},
-		{"text": "Rankings & titles", "press": _show_rankings},
-		{"text": "Record & unlocks", "press": _show_record},
-		{"text": "Save & quit", "press": func() -> void:
-			career.save()
-			_to_menu()},
-	])
+	var hub_rows: Array[Dictionary] = [{"text": "★  TO THE RING  ★", "press": _play_match}]
+	if _save_failed:
+		hub_rows.append({"text": "Retry save", "press": _retry_save})
+	hub_rows.append({"text": "Rankings & titles", "press": _show_rankings})
+	hub_rows.append({"text": "Record & unlocks", "press": _show_record})
+	hub_rows.append({"text": "Save & quit", "press": _save_quit})
+	_build(hub_rows)
+
+
+## Save first; the career only goes away from the menu when the file has it (issue #16).
+func _save_quit() -> void:
+	if career.save():
+		_to_menu()
+	else:
+		_save_failed = true
+		_show_save_failed()
 
 
 ## The show's name up on the titantron.
@@ -266,6 +324,8 @@ func _show_results(report: Dictionary) -> void:
 	for line in report["results"]:
 		t += "%s\n" % line
 	t += "\n" + _standing(career)
+	if _save_failed:
+		t += "\n\n[color=#ff3b4e]⚠ THIS SHOW COULDN'T BE SAVED — retry from the hub.[/color]"
 	_body.text = t
 	_stage.show_lineup([career.entry(career.you)["look"]], [career.belts().get(career.you, 0)])
 	_build([{"text": "Continue", "press": func() -> void:

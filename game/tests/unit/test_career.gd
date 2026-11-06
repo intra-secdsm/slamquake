@@ -282,6 +282,109 @@ func test_an_outcome_promo_does_not_skip_the_next_shows_story() -> void:
 	assert_eq(screen._page, "hub", "and is not repeated on the way back to the hub")
 
 
+func _find_row(screen: Node, text: String) -> int:
+	for i in screen._rows.size():
+		if screen._rows[i].text == text:
+			return i
+	return -1
+
+
+## A career whose save file can't be written: the failure is reported, the progress is
+## kept in memory, a retry saves it once, and leaving needs an explicit discard (issue #16).
+func test_a_failed_initial_save_is_reported_and_can_be_retried() -> void:
+	var good := Career.path
+	var screen: Node = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	assert_eq(screen._page, "new")
+	# fault injection: a missing destination directory
+	Career.path = "user://no_such_career_dir_%d/x.json" % OS.get_process_id()
+	screen._on_row_pressed(2)      # ★ START CAREER ★
+	assert_eq(screen._page, "save_failed", "the failed start is reported")
+	assert_true(screen._save_failed)
+	assert_not_null(screen.career, "the new career is kept in memory")
+	assert_false(Career.has_save(), "nothing was written")
+	# fix the destination and retry: the same career saves, and the file has it once
+	Career.path = good
+	screen._on_row_pressed(0)      # Retry save
+	if screen._page == "story":
+		screen._end_story()
+	assert_eq(screen._page, "hub")
+	assert_false(screen._save_failed)
+	var back := Career.load_saved()
+	assert_not_null(back)
+	assert_eq(back.week, 0)
+	assert_eq(back.you, screen.career.you)
+	assert_eq(back.history.size(), 0, "a fresh career has no shows in the file")
+
+
+func test_a_failed_post_match_save_is_retried_without_double_recording() -> void:
+	c.save()
+	var good := Career.path
+	GameState.career = c
+	GameState.career_result = "win"
+	Career.path = "user://no_such_career_dir_%d/x.json" % OS.get_process_id()
+	var screen: Node = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	assert_eq(screen._page, "results")
+	assert_true(screen._save_failed, "the results screen knows the save failed")
+	assert_true("COULDN'T BE SAVED" in screen._body.text)
+	assert_eq(c.week, 1, "memory advanced to the next week")
+	Career.path = good
+	assert_eq(Career.load_saved().week, 0, "...but the file didn't")
+	screen._on_row_pressed(0)      # Continue
+	if screen._page == "story":
+		screen._end_story()
+	assert_eq(screen._page, "hub")
+	assert_true(screen._save_failed, "the hub still shows the pending failure")
+	# retry from the hub: the file catches up, with the result recorded exactly once
+	screen._on_row_pressed(1)      # Retry save
+	assert_eq(screen._page, "hub")
+	assert_false(screen._save_failed)
+	var back := Career.load_saved()
+	assert_eq(back.week, 1)
+	assert_eq(back.history.size(), 1, "the result was recorded exactly once")
+	assert_eq(back.wins[c.you], 1)
+
+
+func test_save_and_quit_holds_progress_until_the_save_succeeds() -> void:
+	c.save()
+	var good := Career.path
+	GameState.career = c
+	GameState.career_result = "loss"
+	Career.path = "user://no_such_career_dir_%d/x.json" % OS.get_process_id()
+	var screen: Node = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	screen._on_row_pressed(0)      # Continue
+	if screen._page == "story":
+		screen._end_story()
+	assert_eq(screen._page, "hub")
+	# Save & quit with an unwritable file must not leave, and must not clear the career
+	var quit_row := _find_row(screen, "Save & quit")
+	assert_gt(quit_row, -1)
+	screen._on_row_pressed(quit_row)
+	assert_eq(screen._page, "save_failed", "a failed save & quit lands on the failure page")
+	assert_not_null(GameState.career, "the career is still in memory")
+	assert_eq(GameState.career.week, 1, "the pending week is retained")
+	Career.path = good
+	assert_eq(Career.load_saved().week, 0, "the file was not advanced")
+	# explicit discard: two presses, and the pending progress is gone
+	screen._on_row_pressed(1)      # Discard progress
+	assert_eq(screen._page, "save_failed", "the first press only asks")
+	screen._on_row_pressed(1)      # Really discard
+	assert_null(GameState.career, "the pending career is discarded")
+	assert_eq(screen._page, "start", "back to the saved (week 0) career")
+	# ...and once the file is writable, Save & quit really quits
+	screen._on_row_pressed(0)      # CONTINUE the week 0 save
+	if screen._page == "story":
+		screen._end_story()
+	assert_eq(screen._page, "hub")
+	screen._on_row_pressed(_find_row(screen, "Save & quit"))
+	assert_null(GameState.career, "the career cleared on the way to the menu")
+
+
 func test_a_career_as_a_created_wrestler() -> void:
 	var e := CawStore.blank()
 	e["name"] = "Rookie Rex"
