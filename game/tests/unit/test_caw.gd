@@ -138,6 +138,27 @@ func test_unsaved_exit_asks_first_and_delete_confirms() -> void:
 	assert_eq(ed._page, "hub")
 
 
+## A delete that can't be written must not drop the wrestler: the editor stays put with a
+## message, the roster and file keep the entry, and a retried delete still works (issue #15).
+func test_failed_delete_keeps_the_wrestler() -> void:
+	_press("★  NEW WRESTLER")
+	_press("★  SAVE")
+	ed._set_tab(0)
+	CawStore.path = "user://no_such_caw_dir_%d/x.json" % OS.get_process_id()
+	_press("Delete this wrestler")
+	_press("Really delete")
+	assert_eq(ed._page, "edit", "stays in the editor on a failed delete")
+	assert_string_contains(ed._info.text, "Couldn't delete")
+	assert_eq(CawStore.entries().size(), 1, "the live roster keeps the wrestler")
+	CawStore.path = TEST_PATH
+	CawStore.reload()
+	assert_eq(CawStore.entries().size(), 1, "the saved file keeps the wrestler")
+	_press("Delete this wrestler")
+	_press("Really delete")
+	assert_eq(CawStore.entries().size(), 0)
+	assert_eq(ed._page, "hub")
+
+
 func test_match_with_a_created_wrestler() -> void:
 	var e := CawStore.blank()
 	e["name"] = "Test Grappler"

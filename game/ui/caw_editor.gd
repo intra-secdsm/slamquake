@@ -234,8 +234,13 @@ func _delete() -> void:
 		_confirm = "delete"
 		_refresh()
 		return
-	CawStore.remove(_entry["id"])
-	_show_hub()
+	if CawStore.remove(_entry["id"]):
+		_show_hub()
+	else:
+		# the wrestler is still in the roster and the file: stay put and let the user retry
+		_confirm = ""
+		_info.text = "Couldn't delete (the save file can't be written)."
+		_refresh()
 
 
 func _changed() -> void:

@@ -43,38 +43,49 @@ static func reload() -> void:
 			_entries.append(from_save(d))
 
 
-static func save() -> bool:
-	var list: Array = []
-	for e in entries():
-		list.append(to_save(e))
+## Write `list` to the save file; the live cache only commits on success, so a failed
+## write leaves both the roster and the file as they were (issue #15).
+static func _commit(list: Array) -> bool:
+	var commit := list.duplicate()
+	var out: Array = []
+	for e in commit:
+		out.append(to_save(e))
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		push_warning("CawStore: can't write %s (%s)" % [path, error_string(FileAccess.get_open_error())])
 		return false
-	f.store_string(JSON.stringify({"version": VERSION, "wrestlers": list}, "\t"))
+	f.store_string(JSON.stringify({"version": VERSION, "wrestlers": out}, "\t"))
+	_entries.clear()
+	for e in commit:
+		_entries.append(e)
+	_loaded = true
 	return true
+
+
+static func save() -> bool:
+	return _commit(entries())
 
 
 ## Add or replace (by id) and save.
 static func put(entry: Dictionary) -> bool:
 	var e := from_save(to_save(entry))     # normalise
-	var list := entries()
+	var list := entries().duplicate()
 	for i in list.size():
 		if list[i]["id"] == e["id"]:
 			list[i] = e
-			return save()
+			return _commit(list)
 	if list.size() >= MAX_WRESTLERS:
 		return false
 	list.append(e)
-	return save()
+	return _commit(list)
 
 
 static func remove(id: String) -> bool:
-	var list := entries()
+	var list := entries().duplicate()
 	for i in list.size():
 		if list[i]["id"] == id:
 			list.remove_at(i)
-			return save()
+			return _commit(list)
 	return false
 
 

@@ -119,6 +119,41 @@ func test_broken_save_file_is_ignored() -> void:
 	assert_eq(CawStore.entries().size(), 0)
 
 
+## Failed writes (unwritable destination) must leave both the live roster and the saved
+## file intact, and a later successful save must not persist the rejected changes
+## (issue #15).
+func test_failed_writes_leave_roster_and_file_intact() -> void:
+	var ok := CawStore.blank()
+	ok["name"] = "Kept One"
+	assert_true(CawStore.put(ok))
+	var saved_before := FileAccess.get_file_as_string(TEST_PATH)
+	# an unwritable destination: a missing directory
+	CawStore.path = "user://no_such_caw_dir_%d/x.json" % OS.get_process_id()
+	var edited := CawStore.get_by_id(ok["id"]).duplicate(true)
+	edited["name"] = "Rejected Edit"
+	assert_false(CawStore.put(edited), "the edit can't be written")
+	var fresh := CawStore.blank()
+	assert_false(CawStore.put(fresh), "the create can't be written")
+	assert_false(CawStore.remove(ok["id"]), "the delete can't be written")
+	assert_eq(CawStore.entries().size(), 1, "the live roster is untouched by the failures")
+	assert_eq(CawStore.get_by_id(ok["id"]).get("name", "<missing>"), "Kept One",
+		"the live roster still has the original entry")
+	# back to the working destination: the saved file was never touched by the failures
+	CawStore.path = TEST_PATH
+	assert_eq(FileAccess.get_file_as_string(TEST_PATH), saved_before, "the saved file is intact")
+	CawStore.reload()
+	assert_eq(CawStore.entries().size(), 1, "reload shows only the saved wrestler")
+	assert_eq(CawStore.get_by_id(ok["id"]).get("name", "<missing>"), "Kept One")
+	assert_eq(CawStore.get_by_id(fresh["id"]), {}, "the rejected create didn't stick")
+	# a later successful save persists the good state, not the rejected edit
+	var again := CawStore.get_by_id(ok["id"]).duplicate(true)
+	again["tagline"] = "REBUILT"
+	assert_true(CawStore.put(again))
+	CawStore.reload()
+	assert_eq(CawStore.entries().size(), 1)
+	assert_eq(CawStore.get_by_id(ok["id"])["tagline"], "REBUILT")
+
+
 func test_match_uses_the_wrestlers_moveset() -> void:
 	GameState.rules = "nodq"
 	GameState.match_entrants = [
