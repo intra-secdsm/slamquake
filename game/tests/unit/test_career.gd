@@ -282,6 +282,32 @@ func test_an_outcome_promo_does_not_skip_the_next_shows_story() -> void:
 	assert_eq(screen._page, "hub", "and is not repeated on the way back to the hub")
 
 
+## Restarting a career in the same session must not inherit the previous career's
+## "story seen" marker: a fresh career starts at week 0, and its opening beats must
+## still play (issue #19).
+func test_restarting_a_career_in_the_same_session_plays_the_opening_story() -> void:
+	# a first career whose week-zero story already played
+	GameState.career = c
+	GameState.set_meta("career_story_week", 0)
+	var screen: Node = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	assert_eq(screen._page, "hub", "the seen week-zero story is not replayed")
+	# back to the menu and over to the career screen again to start over
+	GameState.career = null
+	screen = load("res://ui/career.tscn").instantiate()
+	add_child_autofree(screen)
+	await wait_frames(2)
+	assert_eq(screen._page, "new", "with no saved career, straight to the new career page")
+	screen._on_row_pressed(2)       # START CAREER
+	await wait_frames(2)
+	assert_eq(screen.career.week, 0)
+	assert_eq(screen._page, "story", "the new career's opening story plays")
+	var intro: Array = screen.career.beats()
+	assert_false(intro.is_empty(), "a fresh career has its week-zero beats")
+	assert_eq(screen._scenes[0]["lines"], intro[0]["lines"])
+
+
 func test_a_career_as_a_created_wrestler() -> void:
 	var e := CawStore.blank()
 	e["name"] = "Rookie Rex"
