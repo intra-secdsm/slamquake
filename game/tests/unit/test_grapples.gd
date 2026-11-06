@@ -113,6 +113,50 @@ func test_whip_into_corner_slams_turnbuckle() -> void:
 	assert_true(await _wait_until(func() -> bool: return b.state == S.CORNERED, 60))
 
 
+## A floor-level whip (released outside the ring) must not target an in-ring corner, from
+## any side and any diagonal (issue #14).
+func test_outside_whip_release_targets_no_in_ring_corner() -> void:
+	var origins := [Vector3(-4.5, 0.02, 0.0), Vector3(4.5, 0.02, 0.0),
+		Vector3(0.0, 0.02, -4.5), Vector3(0.0, 0.02, 4.5)]
+	var dirs := [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK,
+		Vector3(1, 0, 1).normalized(), Vector3(-1, 0, 1).normalized(),
+		Vector3(1, 0, -1).normalized(), Vector3(-1, 0, -1).normalized()]
+	for o in origins:
+		for d in dirs:
+			b.global_position = o
+			b.rotation.y = atan2(d.x, d.z)
+			b._start_whipped(b._flat_xform(), d)
+			assert_eq(b._corner, -1, "no in-ring corner for a floor-level run: %s / %s" % [str(o), str(d)])
+			b._enter(S.IDLE)
+			await wait_physics_frames(2)
+
+
+## The issue's probe: a whip released ringside toward the far corner. The old corner snap
+## carried the wrestler across the ring at the 3 s timeout; the run must instead terminate
+## at the barricade, outside (issue #14).
+func test_outside_whip_timeout_stays_outside() -> void:
+	b.global_position = Vector3(-4.5, 0.02, 0.0)
+	var dir := Ring.corner(0) - b.global_position
+	dir.y = 0
+	dir = dir.normalized()
+	b._start_whipped(b._flat_xform(), dir)
+	var entered_corner := false
+	var went_inside := false
+	for i in 400:   # up to ~6.5 s: past both the 3 s corner snap and the 4 s run timeout
+		if b.state in [S.CORNER_HIT, S.CORNERED]:
+			entered_corner = true
+		var p := b.global_position
+		if absf(p.x) < 3.0 and absf(p.z) < 3.0:
+			went_inside = true
+		if b.state == S.IDLE and i > 60:
+			break
+		await wait_physics_frames(1)
+	assert_false(entered_corner, "no in-ring corner slam for an outside whip")
+	assert_false(went_inside, "the run never crosses under the ring")
+	assert_eq(b.state, S.IDLE, "the run terminates")
+	assert_true(b.outside, "still outside after the run")
+
+
 func test_pin_and_kickout() -> void:
 	b.health = 80.0
 	b._go_down(5.0)

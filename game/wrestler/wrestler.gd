@@ -1212,6 +1212,7 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 
 func _start_whipped(xform: Transform3D, dir: Vector3) -> void:
 	global_transform = xform
+	_update_region()
 	_set_solid(true)
 	_pair = {}
 	partner = null
@@ -1219,7 +1220,9 @@ func _start_whipped(xform: Transform3D, dir: Vector3) -> void:
 	_face(_run_dir, 0.0, true)
 	_whipped = true
 	_rebounds = 0
-	_corner = _corner_in_direction(global_position, _run_dir)
+	# an in-ring corner only exists for the canvas: a floor-level run is aimed at the
+	# barricade, not at a turnbuckle it can't reach (issue #14)
+	_corner = -1 if outside else _corner_in_direction(global_position, _run_dir)
 	_enter(State.WHIPPED, 0.0)
 
 
@@ -1236,8 +1239,10 @@ func _st_whipped(_delta: float) -> void:
 	_face(_run_dir, 0.0, true)
 	velocity.x = _run_dir.x * WHIP_SPEED
 	velocity.z = _run_dir.z * WHIP_SPEED
-	if _corner >= 0:
-		# home in on the turnbuckle; ropes don't matter on the way into a corner
+	if _corner >= 0 and not outside:
+		# home in on the turnbuckle; ropes don't matter on the way into a corner.
+		# never snap to an in-ring corner while outside, even if the timeout is reached
+		# first (issue #14)
 		var spot := _corner_spot(_corner)
 		var to := spot - global_position
 		to.y = 0
