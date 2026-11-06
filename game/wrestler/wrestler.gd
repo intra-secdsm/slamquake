@@ -827,11 +827,13 @@ func _st_knockdown(_delta: float) -> void:
 		_go_down()
 
 
-func _go_down(extra: float = 0.0) -> void:
+## `blend` < 0 uses DOWN's usual blend. Pass 0 after root motion has moved the wrestler: blending
+## from the outgoing clip would carry its root travel onto the new spot (sinking below the floor).
+func _go_down(extra: float = 0.0, blend: float = -1.0) -> void:
 	# slow wrestlers stay down longer, but never past the cap (being beaten down must stay escapable)
 	_down_left = minf((DOWN_BASE + (1.0 - health / MAX_HEALTH) * 2.5) * Stats.time_down(stats), DOWN_MAX) + extra
 	_down_cap = maxf(DOWN_MAX, _down_left)
-	_enter(State.DOWN)
+	_enter(State.DOWN, blend)
 
 
 func _st_down(delta: float) -> void:
@@ -1182,7 +1184,7 @@ func _end_paired(mv: Dictionary, role: String, other: Wrestler) -> void:
 	match end:
 		"idle": _enter(State.IDLE, blend)
 		"getup": _enter(State.GETUP, 0.0)
-		"down": _go_down(0.4 + float(mv.get("down_extra", 0.0)))
+		"down": _go_down(0.4 + float(mv.get("down_extra", 0.0)), -1.0 if Grapples.is_identity(end_info) else 0.0)
 		"stun": _enter(State.STUN, blend)
 		"tieup":
 			_lock(other, _anchor * Grapples.root_xform(end_info, model_scale()), State.TIEUP, "tieup_a")
@@ -1611,7 +1613,7 @@ func _st_root_anim(_delta: float) -> void:
 	_update_region()
 	_set_solid(true)
 	match state:
-		State.FALL_OUT: _go_down(0.5)
+		State.FALL_OUT: _go_down(0.5, 0.0)
 		State.CLIMB: _enter(State.PERCH, 0.0)
 		State.APRON_EXIT: _enter(State.APRON, 0.0)
 		_:

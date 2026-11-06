@@ -490,3 +490,77 @@ func test_climb_and_climb_down_root_motion_is_absolute_for_all_heights() -> void
 		assert_true(await _sample_root_state("climb_down", start_y, h))
 		assert_true(await _wait_until(func() -> bool: return a.state == S.IDLE, 150), "back on the canvas (h=%.2f)" % h)
 		assert_almost_eq(a.global_position.y, Ring.canvas_height(), 0.1, "canvas is absolute (h=%.2f)" % h)
+
+
+## Every pose `w`'s mixer applies: its state and the root bone's world position, read after
+## the animation is applied (not just when the state changes).
+func _trace_root(w: Wrestler) -> Array:
+	var trace: Array = []
+	w.model.anim_player.mixer_applied.connect(func() -> void:
+		var sk: Skeleton3D = w.model.skeleton
+		trace.append({"state": w.state, "root": sk.global_transform * sk.get_bone_global_pose(sk.find_bone("root")).origin}))
+	return trace
+
+
+## Landing from root motion into DOWN: across the handoff and the frames after it the body
+## doesn't jump (the DOWN blend once kept the outgoing clip's 1.15 m drop for a moment after
+## the wrestler was moved to the floor), and it stays on the floor.
+func _assert_lands_without_a_jump(trace: Array, from: S, label: String) -> void:
+	var i := -1
+	for k in range(1, trace.size()):
+		if trace[k - 1]["state"] == from and trace[k]["state"] == S.DOWN:
+			i = k
+			break
+	assert_gt(i, 4, "%s: saw the handoff into DOWN" % label)
+	if i <= 4 or trace.size() < i + 21:
+		return
+	var worst := 0.0
+	for k in range(i - 4, i + 20):
+		worst = maxf(worst, (trace[k + 1]["root"] - trace[k]["root"]).length())
+	assert_lt(worst, 0.1, "%s: biggest root step per frame around the landing %.3f m" % [label, worst])
+	var lowest := INF
+	for k in range(i, i + 21):
+		lowest = minf(lowest, trace[k]["root"].y)
+	assert_gt(lowest, -0.03, "%s: lowest root after landing %.3f m (floor 0)" % [label, lowest])
+
+
+func test_falling_over_the_top_lands_without_a_jump(h = use_parameters([0.88, 1.0, 1.12])) -> void:
+	_set_height(b, h)
+	_place(b, Vector3(lim - 0.1, Ring.canvas_height(), 1.5), Vector3.LEFT)
+	_place(a, Vector3(lim - 1.0, Ring.canvas_height(), 1.5), Vector3.RIGHT)
+	await wait_physics_frames(2)
+	var trace := _trace_root(b)
+	b.receive_strike(a, Strikes.get_move("clothesline"))
+	await wait_physics_frames(1)
+	assert_eq(b.state, S.FALL_OUT)
+	assert_true(await _wait_until(func() -> bool: return b.state == S.DOWN, 120), "down on the floor")
+	await wait_physics_frames(25)
+	assert_true(b.outside)
+	assert_almost_eq(b.global_position.y, 0.0, 0.05, "on the floor")
+	_assert_lands_without_a_jump(trace, S.FALL_OUT, "fall-out h=%.2f" % h)
+
+
+func test_rope_tossed_victim_lands_without_a_jump(p = use_parameters([
+		[0.88, 0.88], [0.88, 1.0], [0.88, 1.12], [1.0, 0.88], [1.0, 1.0], [1.0, 1.12],
+		[1.12, 0.88], [1.12, 1.0], [1.12, 1.12]])) -> void:
+	_set_height(a, p[0])
+	_set_height(b, p[1])
+	# away from the table at z = 0, so the victim lands on the floor
+	_place(a, Vector3(lim - 1.2, Ring.canvas_height(), 1.5), Vector3.RIGHT)
+	_place(b, Vector3(lim - 0.3, Ring.canvas_height(), 1.5), Vector3.LEFT)
+	await wait_physics_frames(2)
+	var trace := _trace_root(b)
+	ca.press = "grapple"
+	assert_true(await _wait_until(func() -> bool: return a.state == S.TIEUP, 20))
+	ca.hold_move = Vector3.RIGHT
+	ca.hold_run = true
+	assert_true(await _wait_until(func() -> bool: return a.state == S.PAIRED, 30), "toss started")
+	ca.hold_run = false
+	ca.hold_move = Vector3.ZERO
+	assert_eq(a._pair.get("id", ""), "rope_toss")
+	assert_true(await _wait_until(func() -> bool: return b.state == S.DOWN, 120), "landed")
+	await wait_physics_frames(25)
+	assert_true(b.outside)
+	assert_almost_eq(b.global_position.y, 0.0, 0.05, "on the floor")
+	_assert_lands_without_a_jump(trace, S.PAIRED, "rope toss a=%.2f d=%.2f" % [p[0], p[1]])
+

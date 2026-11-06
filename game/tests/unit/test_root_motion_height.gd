@@ -177,3 +177,116 @@ func test_rolling_out_in_a_match_lands_without_a_height_snap() -> void:
 		assert_true(w.outside, "height %.2f landed outside" % h)
 		mw[0].free()
 		await wait_physics_frames(2)
+
+
+# ------------------------------------------- blends and replay (adapted from PR #11)
+
+## A bare instance of the imported scene: plays the untouched clips at scale 1, in real time.
+func _reference() -> Node3D:
+	var r: Node3D = WrestlerModel.MODEL_SCENE.instantiate()
+	add_child_autofree(r)
+	return r
+
+
+func _ref_ap(r: Node3D) -> AnimationPlayer:
+	return r.find_child("AnimationPlayer", true, false)
+
+
+func _ref_root(r: Node3D) -> Vector3:
+	var sk: Skeleton3D = r.find_child("Skeleton3D", true, false)
+	return sk.global_transform * sk.get_bone_global_pose(sk.find_bone("root")).origin
+
+
+func _root_y(m: WrestlerModel) -> float:
+	return (m.skeleton.global_transform * m.skeleton.get_bone_global_pose(m.skeleton.find_bone("root")).origin).y
+
+
+## Blend weight is driven by the mixer clock, not by seeks, so blends are observed in real time.
+func _wait_until_pos(ap: AnimationPlayer, target: float) -> float:
+	for i in 120:
+		if ap.current_animation_position >= target:
+			break
+		await wait_physics_frames(1)
+	return ap.current_animation_position
+
+
+func test_blending_from_idle_into_a_level_clip_stays_absolute() -> void:
+	var m := _model(1.12)
+	var blend := 0.4
+	m.anim_player.play("idle", 0.0)
+	await wait_physics_frames(2)
+	m.anim_player.play("enter_ring", blend)
+	for target in [0.1, 0.2, 0.3, 0.6]:
+		var t := await _wait_until_pos(m.anim_player, target)
+		var y := _root_y(m)
+		var w := minf(1.0, t / blend)   # idle's root is at rest, so only the clip contributes
+		assert_almost_eq(y, w * _source_root("enter_ring", t).y, 0.03, "t=%.3f mid-blend" % t)
+
+
+func test_blending_from_a_finisher_keeps_its_part_scaled() -> void:
+	var h := 1.12
+	var m := _model(h)
+	# park on the highest point of supernova_d's root
+	var src := _source("supernova_d")
+	var track := src.find_track(ROOT_TRACK, Animation.TYPE_POSITION_3D)
+	var best_t := 0.0
+	var best_y := 0.0
+	for k in src.track_get_key_count(track):
+		var y: float = src.track_get_key_value(track, k).y
+		if absf(y) > absf(best_y):
+			best_y = y
+			best_t = src.track_get_key_time(track, k)
+	assert_gt(absf(best_y), 0.3, "supernova_d lifts the root")
+	m.anim_player.play("supernova_d", 0.0)
+	await wait_physics_frames(2)
+	m.anim_player.seek(best_t, true)
+	var blend := 0.4
+	m.anim_player.play("exit_ring", blend)
+	var t := await _wait_until_pos(m.anim_player, blend * 0.5)
+	var w := minf(1.0, t / blend)
+	var want := (1.0 - w) * h * _source_root("supernova_d", best_t + t).y + w * _source_root("exit_ring", t).y
+	assert_almost_eq(_root_y(m), want, 0.04, "finisher part scaled, level clip absolute")
+
+
+func test_replay_style_seeking_lands_on_the_absolute_curve() -> void:
+	# replay.gd freezes the player (speed_scale 0) and seeks back and forth
+	var h := 1.12
+	for anim_name in ["exit_ring", "rope_toss_d"]:
+		var m := _model(h)
+		m.anim_player.play(anim_name, 0.0)
+		await wait_physics_frames(1)
+		m.anim_player.speed_scale = 0.0
+		for t in [0.2, 0.8, 0.5, 1.0, 0.3, 0.9]:
+			m.anim_player.seek(t, true)
+			var src := _source_root(anim_name, t)
+			var got := m.global_transform.affine_inverse() * (m.skeleton.global_transform * m.skeleton.get_bone_global_pose(m.skeleton.find_bone("root")).origin)
+			assert_lt((got - Vector3(src.x * h, src.y, src.z * h)).length(), TOL, "%s seek %.1f" % [anim_name, t])
+		# back to live playback, run past the end: holds the absolute end pose
+		m.anim_player.speed_scale = 1.0
+		m.anim_player.play(anim_name, 0.0)
+		m.anim_player.seek(0.8, true)
+		await wait_physics_frames(60)
+		var length := _source(anim_name).length
+		assert_almost_eq(_root_y(m), _source_root(anim_name, length).y, 0.01, "%s holds its end pose" % anim_name)
+
+
+func test_back_to_back_level_clips_match_the_untouched_clips() -> void:
+	# a corrected model and a bare reference, driven through the same blends on the same frames
+	var m := _model(1.12)
+	var r := _reference()
+	var rap := _ref_ap(r)
+	m.anim_player.play("idle", 0.0)
+	rap.play("idle", 0.0)
+	await wait_physics_frames(2)
+	for anim_name in ["exit_ring", "enter_ring", "exit_ring"]:
+		m.anim_player.play(anim_name, 0.15)
+		rap.play(anim_name, 0.15)
+		var length := _source(anim_name).length
+		var frame := 0
+		while m.anim_player.current_animation_position < length - 1.0 / 60.0:
+			await wait_physics_frames(1)
+			frame += 1
+			if frame in [3, 5, 7, 9, 20]:   # through the blend-in and mid-clip
+				assert_almost_eq(_root_y(m), _ref_root(r).y, 0.02, "%s frame %d" % [anim_name, frame])
+		await wait_physics_frames(4)
+		assert_almost_eq(_root_y(m), _ref_root(r).y, 0.01, "%s end pose" % anim_name)
