@@ -2,6 +2,9 @@ extends Node
 ## Dev tool: stage environment situations for screenshots.
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=chair|perch|table|outside|dive|finisher|reversal [--move=iron_drop]
 ##   [--roster=A,B] picks the two wrestlers (Roster indices), e.g. for --setup=entrance
+##   tools/screenshot.sh res://dev/env_shots.tscn out.png 90 --setup=rootshot [--action=exit|climb]
+##     [--height=1.12] [--at=SECONDS] [--cam=side|front]  stages a height-scaled wrestler
+##     mid root-motion (rolling out of the ring or up a turnbuckle) at --at into the clip
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 900 --setup=move --move=<id> [--at=SECONDS] [--cam=side|front|match]
 ##     performs any moveset move, finisher or taunt (see Movesets); --at pauses that long after the
 ##     move starts and takes the screenshot there. tools/move_sheet.sh makes a contact sheet of these.
@@ -174,6 +177,65 @@ func _ready() -> void:
 			b.global_position = Vector3(0.5, 0.05, Ring.canvas_half() + 1.2)
 			b.outside = true
 			ca.hold_move = Vector3.BACK
+		"rootshot":
+			await _stage_rootshot(a, b, ca)
+
+
+## Stages a wrestler of a given model height partway through a root-motion clip
+## (issue #8 evidence: the body's vertical travel must not scale with height).
+func _stage_rootshot(a: Wrestler, b: Wrestler, ca: Hold) -> void:
+	var y := Ring.canvas_height()
+	var lim := float(Ring.spec()["post_half"]) - Wrestler.ROPE_MARGIN
+	var h := float(DevTools.get_arg("height", "1.12"))
+	var look := a.model.look.duplicate()
+	look.height = h
+	a.model.look = look
+	var at := float(DevTools.get_arg("at", "0.75"))
+	_watch([a], DevTools.get_arg("cam", "side"))
+	if DevTools.get_arg("cam", "side") != "match":
+		m.hud.visible = false
+	match DevTools.get_arg("action", "exit"):
+		"climb":
+			var c := Ring.corner(3)
+			a.global_position = Vector3(c.x - 0.6, y, c.z + 0.6)
+			a.rotation.y = atan2(1, -1)
+			b.global_position = Vector3(c.x - 2.2, y, c.z + 2.0)
+			b._go_down(30.0)
+			await get_tree().physics_frame
+			ca.press = "grapple"
+			for i in 300:
+				await get_tree().physics_frame
+				if a.state == Wrestler.State.CLIMB:
+					break
+			for i in 600:
+				await get_tree().physics_frame
+				if a.model.anim_player.current_animation_position >= at:
+					break
+		_:
+			a.global_position = Vector3(lim - 0.2, y, 0.3)
+			a.rotation.y = PI / 2
+			# a floor-level reference next to the exit edge
+			b.global_position = Vector3(lim + 0.9, 0.0, 0.9)
+			b.outside = true
+			b.rotation.y = -PI / 2
+			await get_tree().physics_frame
+			ca.hold_move = Vector3.RIGHT
+			for i in 300:
+				await get_tree().physics_frame
+				if a.state == Wrestler.State.EXIT_RING:
+					break
+			for i in 600:
+				await get_tree().physics_frame
+				if a.model.anim_player.current_animation_position >= at:
+					break
+	var sk: Skeleton3D = a.model.skeleton
+	var ry: float = (sk.global_transform * sk.get_bone_global_pose(sk.find_bone("root"))).origin.y
+	var ap := a.model.anim_player
+	print("rootshot: action=%s height=%.2f t=%.3f state=%d cur='%s' node_y=%.3f world_root_y=%.4f" % [
+		DevTools.get_arg("action", "exit"), h, ap.current_animation_position, a.state,
+		str(ap.current_animation), a.global_position.y, ry])
+	get_tree().paused = true
+	DevTools.capture_soon()
 
 
 func _stage_move(a: Wrestler, b: Wrestler, ca: Hold, id: String) -> void:
