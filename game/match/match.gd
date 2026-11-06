@@ -152,6 +152,10 @@ func _ready() -> void:
 		var ent := Entrance.new()
 		ent.match_node = self
 		add_child(ent)
+		# added after the children above were set to pausable: without this the director
+		# would inherit the match's always-processing mode and keep the walk going while
+		# paused (issue #18)
+		ent.process_mode = Node.PROCESS_MODE_PAUSABLE
 		ent.finished.connect(_begin_fight)
 		ent.run()
 	else:
