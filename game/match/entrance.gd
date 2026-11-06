@@ -45,6 +45,8 @@ func run() -> void:
 
 
 func _process(delta: float) -> void:
+	if get_tree().paused:
+		return      # pausable anyway; pause menu input must not age or skip the walk
 	_age += delta
 	# ignore the first moment so the button that started the match doesn't also skip this
 	if not _skipped and _age > 0.6 and _any_button():
@@ -109,7 +111,10 @@ func _side(members: Array) -> void:
 				continue
 			done = false
 			var to: Vector3 = targets[i][leg[i]]
-			if w.entrance_walk(to, WALK, get_process_delta_time()):
+			# the process-frame signal below fires while paused too; only unpaused frames
+			# may move the walk (issue #18)
+			var frame := 0.0 if get_tree().paused else get_process_delta_time()
+			if w.entrance_walk(to, WALK, frame):
 				leg[i] += 1
 				if i == 0 and leg[i] == 3:
 					# through the barricade: cut to the hard cam framing just this side
@@ -131,7 +136,7 @@ func _side(members: Array) -> void:
 	for w: Wrestler in members:
 		if w.state == Wrestler.State.IDLE:
 			w._enter(Wrestler.State.ENTRANCE)
-			while not w.entrance_walk(_start_spot(w), WALK, get_process_delta_time()):
+			while not w.entrance_walk(_start_spot(w), WALK, 0.0 if get_tree().paused else get_process_delta_time()):
 				if await _wait(0.0):
 					return
 			w._face(Vector3(-signf(w.global_position.x), 0, 0), 0.0, true)
@@ -142,6 +147,8 @@ func _side(members: Array) -> void:
 
 
 ## Wait (seconds; 0 = one frame). Returns true if the entrances were skipped.
+## The process-frame signal fires while the match is paused too, so only unpaused
+## time counts against the wait (issue #18).
 func _wait(seconds: float) -> bool:
 	if seconds <= 0.0:
 		await get_tree().process_frame
@@ -149,7 +156,8 @@ func _wait(seconds: float) -> bool:
 		var t := 0.0
 		while t < seconds and not _skipped:
 			await get_tree().process_frame
-			t += get_process_delta_time()
+			if not get_tree().paused:
+				t += get_process_delta_time()
 	return _skipped
 
 
