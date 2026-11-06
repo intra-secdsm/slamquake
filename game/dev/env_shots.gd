@@ -5,6 +5,9 @@ extends Node
 ##   tools/screenshot.sh res://dev/env_shots.tscn out.png 900 --setup=move --move=<id> [--at=SECONDS] [--cam=side|front|match]
 ##     performs any moveset move, finisher or taunt (see Movesets); --at pauses that long after the
 ##     move starts and takes the screenshot there. tools/move_sheet.sh makes a contact sheet of these.
+##   godot --path game --fixed-fps 60 -- --scene=res://dev/env_shots.tscn --screenshot=out.png --frames=900
+##     --setup=exit|climb --at=SECONDS [--height=0.88]  roll out / climb, frozen at that clip time
+##   [--height=H] resizes the first wrestler in any setup
 
 class Hold:
 	extends WrestlerController
@@ -59,6 +62,11 @@ func _ready() -> void:
 	b.controller = Hold.new()
 	var y := Ring.canvas_height()
 	var lim := float(Ring.spec()["post_half"]) - Wrestler.ROPE_MARGIN
+	if DevTools.has_arg("height"):
+		# --height=0.88 resizes the first wrestler (WrestlerLook.height)
+		var l: WrestlerLook = a.model.look.duplicate()
+		l.height = float(DevTools.get_arg("height"))
+		a.model.look = l
 	if DevTools.has_arg("chair_rot"):
 		var r := DevTools.get_arg("chair_rot").split_floats(",")
 		var t := DevTools.get_arg("chair_pos", "0,0,0").split_floats(",")
@@ -168,6 +176,39 @@ func _ready() -> void:
 			pass
 		"move":
 			await _stage_move(a, b, ca, DevTools.get_arg("move", "body_slam"))
+		"exit", "climb":
+			# --setup=exit|climb [--at=SECONDS] [--height=H]: roll out to the floor or climb a turnbuckle,
+			# frozen --at seconds into the clip (issue #8: feet meet the floor/turnbuckle at any height)
+			b.global_position = Vector3(-2.5, y, 2.0)
+			m.hud.visible = false
+			if DevTools.get_arg("setup") == "exit":
+				# side on, from the floor, away from the table at z = 0
+				a.global_position = Vector3(lim, y, -2.0)
+				a.rotation.y = PI / 2
+				_fixed_cam(Vector3(lim + 2.2, 0.8, 1.5), Vector3(lim + 1.25, 0.7, -2.0))
+				for t in m.tables:
+					t.visible = false   # keep the feet in view
+				await get_tree().physics_frame
+				a._start_root_anim(Wrestler.State.EXIT_RING, "exit_ring")
+			else:
+				var c := Ring.corner(3)
+				a.global_position = Vector3(c.x - 0.6, y, c.z + 0.6)
+				a.rotation.y = atan2(1, -1)
+				# side on to the climb, from the floor outside the -z ropes
+				var spot := Vector3(c.x - 0.45, y + 1.6, c.z + 0.45)
+				_fixed_cam(spot + Vector3(-3.2, 0.0, -3.2), spot)
+				await get_tree().physics_frame
+				a._try_climb()
+			# --at is clip time; render with Godot's --fixed-fps 60 so the clip and the game clock
+			# stay in step at screenshot frame rates (else the wrestler can land before --at)
+			var at := float(DevTools.get_arg("at", "0.8"))
+			var clip := a.model.anim_player.current_animation
+			while a.model.anim_player.current_animation == clip and a.model.anim_player.current_animation_position < at:
+				await get_tree().process_frame
+			get_tree().paused = true
+			print("env_shots: %s at %.3f s into %s, wrestler y %.3f" % [Wrestler.State.keys()[a.state],
+				a.model.anim_player.current_animation_position, a.model.anim_player.current_animation, a.global_position.y])
+			DevTools.capture_soon()
 		"outside":
 			a.global_position = Vector3(-1.0, y, lim - 0.2)
 			a.rotation.y = 0
@@ -245,6 +286,16 @@ func _stage_move(a: Wrestler, b: Wrestler, ca: Hold, id: String) -> void:
 		await get_tree().create_timer(float(DevTools.get_arg("at"))).timeout
 		get_tree().paused = true
 		DevTools.capture_soon()
+
+
+## A still camera at `from` looking at `to`.
+func _fixed_cam(from: Vector3, to: Vector3) -> void:
+	var cam := Camera3D.new()   # not _cam, which _process keeps steering
+	cam.fov = 50
+	add_child(cam)
+	cam.global_position = from
+	cam.look_at(to)
+	cam.current = true
 
 
 ## A fixed-height dev camera inside the ropes that keeps these wrestlers in view
