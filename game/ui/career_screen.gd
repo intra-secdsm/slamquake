@@ -139,6 +139,9 @@ func _start_career() -> void:
 	career = Career.start(Roster.get_entry(_pick)["id"], _level)
 	career.save()
 	GameState.career = career
+	# The "story seen" marker is a session-wide GameState meta; clear it for the new
+	# career or a same-session restart would skip the fresh week-zero introduction.
+	GameState.set_meta("career_story_week", -1)
 	_show_hub()
 
 

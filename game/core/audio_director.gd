@@ -12,6 +12,7 @@ var _players: Array[AudioStreamPlayer3D] = []
 var _next := 0
 var _rng := RandomNumberGenerator.new()
 var _music: Array[AudioStreamPlayer] = []     # two players for crossfades
+var _music_fades: Array = [null, null]        # in-flight volume tween per music player
 var _music_on := 0
 var _music_name := ""
 var _music_db := 0.0
@@ -66,33 +67,56 @@ static func _looped(stream: AudioStream) -> AudioStream:
 	return stream
 
 
+## Start or cancel a volume fade on one music player. Any in-flight fade on that
+## player is superseded: two tweens on one volume let the last one to finish win, so a
+## stale fade-out could stomp a settled theme back to silence (issue #17).
+func _fade_music(i: int, to_db: float, dur: float) -> void:
+	_cancel_music_fade(i)
+	var tw := create_tween()
+	tw.tween_property(_music[i], "volume_db", to_db, maxf(dur, 0.05))
+	_music_fades[i] = tw
+
+
+func _cancel_music_fade(i: int) -> void:
+	var stale: Tween = _music_fades[i]
+	if stale != null and stale.is_valid():
+		stale.kill()
+	_music_fades[i] = null
+
+
 ## Crossfade to a music track from assets/audio/music ("" fades out), at `volume_db`.
 ## A fade of 0 starts it at full level at once (the loading screen: a fade would stall).
 func play_music(track: String, fade: float = 1.0, loop: bool = true, volume_db: float = 0.0) -> void:
 	if track == _music_name:
 		if track != "" and not is_equal_approx(_music_db, volume_db):
 			_music_db = volume_db
-			create_tween().tween_property(_music[_music_on], "volume_db", volume_db, maxf(fade, 0.05))
+			_fade_music(_music_on, volume_db, fade)
 		return
 	_music_name = track
 	_music_db = volume_db
-	var old := _music[_music_on]
+	var old_i := _music_on
 	_music_on = 1 - _music_on
-	var cur := _music[_music_on]
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(old, "volume_db", -80.0, maxf(fade, 0.05))
+	var cur_i := _music_on
+	_fade_music(old_i, -80.0, fade)
 	if track == "":
+		# silence: the player being handed over goes quiet too, or a pending fade-in
+		# of its own would lift it back up after this transition settles
+		_fade_music(cur_i, -80.0, fade)
 		return
 	var path := MUSIC_DIR + track + ".wav"
 	if not ResourceLoader.exists(path):
 		push_warning("unknown music %s" % track)
+		_fade_music(cur_i, -80.0, fade)
 		return
 	var stream: AudioStream = load(path)
-	cur.stream = _looped(stream) if loop else stream
-	cur.volume_db = volume_db if fade <= 0.0 else -30.0
-	cur.play()
+	# set directly below, so nothing may still be fading this player (an instant start
+	# could otherwise be pulled back down by a fade-out from an earlier quick switch)
+	_cancel_music_fade(cur_i)
+	_music[cur_i].stream = _looped(stream) if loop else stream
+	_music[cur_i].volume_db = volume_db if fade <= 0.0 else -30.0
+	_music[cur_i].play()
 	if fade > 0.0:
-		tw.tween_property(cur, "volume_db", volume_db, fade * 0.6)
+		_fade_music(cur_i, volume_db, fade * 0.6)
 
 
 func music_playing() -> String:
