@@ -71,12 +71,17 @@ static func _looped(stream: AudioStream) -> AudioStream:
 ## player is superseded: two tweens on one volume let the last one to finish win, so a
 ## stale fade-out could stomp a settled theme back to silence (issue #17).
 func _fade_music(i: int, to_db: float, dur: float) -> void:
-	var stale: Tween = _music_fades[i]
-	if stale != null and stale.is_valid():
-		stale.kill()
+	_cancel_music_fade(i)
 	var tw := create_tween()
 	tw.tween_property(_music[i], "volume_db", to_db, maxf(dur, 0.05))
 	_music_fades[i] = tw
+
+
+func _cancel_music_fade(i: int) -> void:
+	var stale: Tween = _music_fades[i]
+	if stale != null and stale.is_valid():
+		stale.kill()
+	_music_fades[i] = null
 
 
 ## Crossfade to a music track from assets/audio/music ("" fades out), at `volume_db`.
@@ -104,6 +109,9 @@ func play_music(track: String, fade: float = 1.0, loop: bool = true, volume_db: 
 		_fade_music(cur_i, -80.0, fade)
 		return
 	var stream: AudioStream = load(path)
+	# set directly below, so nothing may still be fading this player (an instant start
+	# could otherwise be pulled back down by a fade-out from an earlier quick switch)
+	_cancel_music_fade(cur_i)
 	_music[cur_i].stream = _looped(stream) if loop else stream
 	_music[cur_i].volume_db = volume_db if fade <= 0.0 else -30.0
 	_music[cur_i].play()
